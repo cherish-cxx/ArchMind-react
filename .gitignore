@@ -1,0 +1,10 @@
+node_modules/
+dist/
+
+# 本地环境变量（构建时由 Dockerfile 显式传入）
+.env.local
+.env.*.local
+
+.idea/
+.vscode/
+*.log
