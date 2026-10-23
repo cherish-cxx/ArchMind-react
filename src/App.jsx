@@ -1,16 +1,23 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Sidebar from './components/Sidebar'
 import LoginModal from './components/LoginModal'
 import NewProjectModal from './components/NewProjectModal'
 import Workbench from './components/Workbench'
 import ProjectList from './components/ProjectList'
 import ProjectDetail from './components/ProjectDetail'
+import CodeDrawer from './components/code/CodeDrawer'
 import MemoryPage from './pages/MemoryPage'
 import { login as apiLogin, logout as apiLogout } from './api/auth'
 import {
-  analyze, listProjects, createProject, upload, projectOverview, deleteProject
+  analyze, listProjects, createProject, createProjectWithSource, upload, projectOverview, deleteProject
 } from './api/project'
 import { useSession, setLogin as storeSetLogin, clearSession } from './auth/sessionStore'
+import useTaskPolling from './hooks/useTaskPolling'
+
+const MAX_UPLOAD_MB = 500
+const MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1024 * 1024
+const formatSize = (bytes) =>
+  bytes >= 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)}MB` : `${Math.ceil(bytes / 1024)}KB`
 
 // 页面：workbench 工作台 / memory 记忆地图 / projects 我的项目 / detail 项目详情
 export default function App() {
@@ -28,9 +35,21 @@ export default function App() {
   const [overviewLoading, setOverviewLoading] = useState(false)
   const [analyzing, setAnalyzing] = useState(false)
   const [analyzeError, setAnalyzeError] = useState('')
+  const [taskProgress, setTaskProgress] = useState(0)
+  const [taskStage, setTaskStage] = useState('')
   const [uploadInfo, setUploadInfo] = useState(null)
+  const [codeTarget, setCodeTarget] = useState(null)
 
   const analyzeSeq = useRef(0) // 使切换项目/退出后在途的分析请求作废
+  const currentProjectRef = useRef(null)
+  useEffect(() => { currentProjectRef.current = currentProject }, [currentProject])
+
+  // 分析任务轮询：必须在使用它的 effect/callback 之前初始化（避免 TDZ）
+  const {
+    start: startTaskPolling,
+    resume: resumeTaskPolling,
+    stop: stopTaskPolling
+  } = useTaskPolling()
 
   // 轻提示（右上角）
   const [notice, setNotice] = useState('')
@@ -67,11 +86,12 @@ export default function App() {
       setOverview(null)
       setAnalyzeError('')
       analyzeSeq.current++
+      stopTaskPolling()
       setPage('workbench')
       return
     }
     reloadProjects()
-  }, [loggedIn, reloadProjects])
+  }, [loggedIn, reloadProjects, stopTaskPolling])
 
   // ========== 概况读取 / 分析 ==========
   const resetOverview = useCallback(() => {
@@ -79,6 +99,8 @@ export default function App() {
     setOverviewLoading(false)
     setAnalyzing(false)
     setAnalyzeError('')
+    setTaskProgress(0)
+    setTaskStage('')
   }, [])
 
   // 读库概况：GET /overview；尚未分析时后端报错，静默当空处理
@@ -98,27 +120,83 @@ export default function App() {
     }
   }, [])
 
+  // 任务成功后按 projectId 拉一次已落库的概况
+  const refreshOverview = useCallback(async (projectId) => {
+    if (!projectId) return
+    try {
+      const data = await projectOverview(projectId)
+      // 任务里的 projectId 可能是数字，项目 id 已被规范为字符串
+      if (String(currentProjectRef.current?.id) === String(projectId)) setOverview(data)
+    } catch {
+      // 概况尚未落库或读取失败：保留当前状态，可由用户重试
+    }
+  }, [])
+
+  const taskHandlers = useMemo(() => ({
+    onUpdate: (t) => {
+      setAnalyzing(true)
+      setTaskProgress(typeof t?.progress === 'number' ? t.progress : 0)
+      setTaskStage(t?.currentStage || '')
+    },
+    onSuccess: (t) => {
+      setAnalyzing(false)
+      setTaskProgress(100)
+      setTaskStage('')
+      refreshOverview(t?.projectId)
+      reloadProjects()
+    },
+    onFailure: (t) => {
+      setAnalyzing(false)
+      setTaskStage('')
+      setAnalyzeError(t?.error || '项目分析失败，请稍后重试')
+      reloadProjects()
+    },
+    onPartial: (t) => {
+      setAnalyzing(false)
+      setTaskStage('')
+      setAnalyzeError(t?.error || '部分分析阶段失败，结果可能不完整')
+      refreshOverview(t?.projectId)
+      reloadProjects()
+    }
+  }), [refreshOverview, reloadProjects])
+
   // 分析（force=true 强制重跑并覆盖，用于显式「重新分析」）
+  // POST /analyze 只负责投递，真正的进度由轮询跟踪；绝不再把 TaskResponse 当成 overview。
   const runAnalyze = useCallback(async (projectId, force) => {
     if (!projectId) return
     const seq = ++analyzeSeq.current
-    setOverview(null)
-    setAnalyzing(true)
     setAnalyzeError('')
+    setTaskProgress(0)
+    setTaskStage('')
+    setAnalyzing(true)
     try {
-      const data = await analyze(projectId, force)
+      const task = await analyze(projectId, force)
       if (seq !== analyzeSeq.current) return
-      setOverview(data)
-      setOverviewLoading(false)
-      reloadProjects() // 刷新列表分析状态徽标
+      if (!task) {
+        setAnalyzing(false)
+        return
+      }
+      if (task.status === 'SUCCESS') {
+        setAnalyzing(false)
+        setTaskProgress(100)
+        setTaskStage('')
+        if (task.detail) setOverview(task.detail)
+        else refreshOverview(projectId)
+        reloadProjects()
+        return
+      }
+      if (task.status === 'FAILED' || task.status === 'PARTIAL') {
+        taskHandlers[task.status === 'FAILED' ? 'onFailure' : 'onPartial'](task)
+        return
+      }
+      // PENDING / RUNNING：后端已异步提交，交给轮询
+      startTaskPolling(task.taskId, taskHandlers)
     } catch (err) {
       if (seq !== analyzeSeq.current) return
       setAnalyzeError(err?.message || '项目分析失败，请稍后重试')
-      setOverviewLoading(false)
-    } finally {
-      if (seq === analyzeSeq.current) setAnalyzing(false)
+      setAnalyzing(false)
     }
-  }, [reloadProjects])
+  }, [refreshOverview, reloadProjects, startTaskPolling, taskHandlers])
 
   // ========== 页面流转 ==========
   const navigate = useCallback((p) => {
@@ -126,30 +204,44 @@ export default function App() {
     setPage(p)
   }, [])
 
+  // 打开代码抽屉：图谱节点 / 代码探索列表共用
+  const handleOpenCode = useCallback((uid, simpleName) => {
+    const projectId = currentProjectRef.current?.id
+    if (!projectId || !uid) return
+    setCodeTarget({ projectId, uid, name: simpleName })
+  }, [])
+
   const openProject = useCallback((project) => {
     analyzeSeq.current++ // 作废在途分析
+    stopTaskPolling()
+    setCodeTarget(null)
     setCurrentProject(project)
     resetOverview()
     setPage('detail')
     loadDbOverview(project.id)
-  }, [loadDbOverview, resetOverview])
+    resumeTaskPolling(project.id, taskHandlers)
+  }, [loadDbOverview, resetOverview, resumeTaskPolling, stopTaskPolling, taskHandlers])
 
   // 图谱页顶部切换项目：留在图谱页，只换当前项目与其概况
   const switchProject = useCallback((project) => {
     analyzeSeq.current++
+    stopTaskPolling()
+    setCodeTarget(null)
     setCurrentProject(project)
     resetOverview()
     loadDbOverview(project.id)
-  }, [loadDbOverview, resetOverview])
+    resumeTaskPolling(project.id, taskHandlers)
+  }, [loadDbOverview, resetOverview, resumeTaskPolling, stopTaskPolling, taskHandlers])
 
   // 列表里的「重新分析」：进入详情并强制重跑
   const analyzeProject = useCallback((project) => {
     analyzeSeq.current++
+    stopTaskPolling()
     setCurrentProject(project)
     resetOverview()
     setPage('detail')
     runAnalyze(project.id, true)
-  }, [resetOverview, runAnalyze])
+  }, [resetOverview, runAnalyze, stopTaskPolling])
 
   // ========== 上传 ==========
   const askUpload = useCallback((project) => {
@@ -165,8 +257,21 @@ export default function App() {
       showNotice('仅支持 .zip 压缩包')
       return
     }
+    if (file.size > MAX_UPLOAD_BYTES) {
+      showNotice(`压缩包不能超过 ${MAX_UPLOAD_MB}MB（当前 ${formatSize(file.size)}）`)
+      return
+    }
     try {
-      const res = await upload(project.id, file)
+      showNotice('正在上传…')
+      let lastPct = -10
+      const res = await upload(project.id, file, {
+        onProgress: (pct) => {
+          if (pct === 100 || pct - lastPct >= 10) {
+            lastPct = pct
+            showNotice(`上传中… ${pct}%`)
+          }
+        }
+      })
       setUploadInfo({ fileName: res?.fileName, fileSize: res?.fileSize })
       // 上传了新源码：旧概况作废，等待重新分析
       setOverview(null)
@@ -178,12 +283,28 @@ export default function App() {
   }, [reloadProjects, showNotice])
 
   // ========== 新建（含可选上传 + 自动分析） ==========
-  const handleCreate = useCallback(async (payload) => {
-    const project = await createProject({
-      name: payload.name,
-      description: payload.description,
-      gitUrl: payload.gitUrl
-    })
+  const handleCreate = useCallback(async (payload, onProgress) => {
+    let project
+    if (payload.file) {
+      // 创建 + 上传是一个请求：失败整体回滚，重试复用同一个幂等键
+      const res = await createProjectWithSource(
+        { name: payload.name, description: payload.description, gitUrl: payload.gitUrl },
+        payload.file,
+        { idempotencyKey: payload.idempotencyKey, onProgress }
+      )
+      project = res.project
+      setUploadInfo(res.upload
+        ? { fileName: res.upload.fileName, fileSize: res.upload.fileSize }
+        : null)
+    } else {
+      project = await createProject({
+        name: payload.name,
+        description: payload.description,
+        gitUrl: payload.gitUrl
+      })
+      setUploadInfo(null)
+    }
+
     await reloadProjects()
     // 进入新项目详情
     analyzeSeq.current++
@@ -191,14 +312,9 @@ export default function App() {
     resetOverview()
     setPage('detail')
 
-    // 有 zip 则上传（快速），随后按勾选自动分析（不阻塞弹窗关闭）
-    if (payload.file) {
-      const res = await upload(project.id, payload.file)
-      setUploadInfo({ fileName: res?.fileName, fileSize: res?.fileSize })
-      await reloadProjects()
-      if (payload.autoAnalyze) {
-        runAnalyze(project.id, false)
-      }
+    // 按勾选自动分析；进度交给轮询（runAnalyze 内部不会阻塞弹窗关闭）
+    if (payload.autoAnalyze && payload.file) {
+      runAnalyze(project.id, false)
     }
     return project
   }, [reloadProjects, resetOverview, runAnalyze])
@@ -212,6 +328,8 @@ export default function App() {
       showNotice('项目已删除')
       if (currentProject?.id === project.id) {
         analyzeSeq.current++
+        stopTaskPolling()
+        setCodeTarget(null)
         setCurrentProject(null)
         resetOverview()
       }
@@ -220,7 +338,7 @@ export default function App() {
     } catch (err) {
       showNotice(err?.message || '删除失败')
     }
-  }, [currentProject, page, reloadProjects, resetOverview, showNotice])
+  }, [currentProject, page, reloadProjects, resetOverview, showNotice, stopTaskPolling])
 
   // ========== 登录 / 登出 ==========
   const handleLogin = async (username, password) => {
@@ -265,10 +383,13 @@ export default function App() {
           overview={overview}
           analyzing={analyzing}
           analyzeError={analyzeError}
+          taskProgress={taskProgress}
+          taskStage={taskStage}
           uploadInfo={uploadInfo}
           onOpenProject={switchProject}
           onAnalyze={() => runAnalyze(currentProject?.id, true)}
           onUpload={() => currentProject && askUpload(currentProject)}
+          onOpenCode={handleOpenCode}
           onOpenLogin={() => setLoginOpen(true)}
           onGoProjects={() => setPage('projects')}
         />
@@ -299,10 +420,13 @@ export default function App() {
               overview={overview}
               loading={overviewLoading || analyzing}
               analyzing={analyzing}
+              taskProgress={taskProgress}
+              taskStage={taskStage}
               error={analyzeError}
               onBack={() => setPage('projects')}
               onUpload={() => currentProject && askUpload(currentProject)}
               onAnalyze={() => runAnalyze(currentProject?.id, true)}
+              onOpenCode={handleOpenCode}
               onDelete={() => handleDelete(currentProject)}
             />
           )}
@@ -325,6 +449,13 @@ export default function App() {
 
       <LoginModal open={loginOpen} onClose={() => setLoginOpen(false)} onLogin={handleLogin} />
       <NewProjectModal open={newProjectOpen} onClose={() => setNewProjectOpen(false)} onCreate={handleCreate} />
+      <CodeDrawer
+        open={!!codeTarget}
+        projectId={codeTarget?.projectId}
+        uid={codeTarget?.uid}
+        name={codeTarget?.name}
+        onClose={() => setCodeTarget(null)}
+      />
     </div>
   )
 }

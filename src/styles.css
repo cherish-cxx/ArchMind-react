@@ -884,6 +884,17 @@ ul { list-style: none; }
   padding: 8px 12px; border-radius: var(--radius-sm); background: #fbefef;
   color: var(--danger); font-size: 12.5px;
 }
+.pd-progress {
+  display: flex; align-items: center; gap: 10px; margin-top: 12px;
+}
+.pd-progress-track {
+  flex: 1; height: 6px; border-radius: 3px; overflow: hidden;
+  background: var(--bg-subtle); border: 1px solid var(--border);
+}
+.pd-progress-bar {
+  height: 100%; background: var(--primary); transition: width .2s ease;
+}
+.pd-progress-text { font-size: 11.5px; color: var(--text-3); flex-shrink: 0; }
 .pd-section { background: #fff; border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 18px; margin-top: 16px; }
 .pd-section-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 12px; }
 .pd-section-title { font-size: 14px; font-weight: 600; }
@@ -937,7 +948,15 @@ ul { list-style: none; }
   background: var(--bg-subtle);
 }
 .file-name { font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-size { font-size: 11.5px; color: var(--text-4); flex-shrink: 0; }
 .file-clear { font-size: 12px; color: var(--danger); flex-shrink: 0; }
+.upload-progress {
+  height: 6px; border-radius: 3px; background: var(--bg-subtle);
+  border: 1px solid var(--border); overflow: hidden; margin: 4px 0 2px;
+}
+.upload-progress-bar {
+  height: 100%; background: var(--primary); transition: width .15s ease;
+}
 .field-hint { font-size: 11.5px; color: var(--text-4); }
 .checkbox-row { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-2); cursor: pointer; }
 .checkbox-row input { accent-color: var(--primary); }
@@ -1363,3 +1382,54 @@ ul { list-style: none; }
   opacity: 1;
   filter: drop-shadow(0 0 2px rgba(79, 99, 210, 0.45));
 }
+
+/* ========== 代码抽屉 ========== */
+.code-drawer-overlay {
+  position: fixed; inset: 0; z-index: 300; background: rgba(15, 18, 24, .42);
+  display: flex; justify-content: flex-end;
+}
+.code-drawer {
+  width: min(780px, 94vw); height: 100%; display: flex; flex-direction: column;
+  background: #0f1319; color: #d7dde7; box-shadow: -12px 0 40px rgba(0, 0, 0, .35);
+  animation: drawer-in .18s ease;
+}
+@keyframes drawer-in {
+  from { transform: translateX(24px); opacity: .6; }
+  to { transform: none; opacity: 1; }
+}
+.code-drawer-head {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
+  padding: 14px 16px; border-bottom: 1px solid rgba(255, 255, 255, .08);
+}
+.code-drawer-title { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.code-drawer-title strong { font-size: 14px; }
+.code-drawer-uid {
+  font-size: 11px; color: #8b96a5;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.code-drawer-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.code-drawer .icon-btn { color: #c6cedb; }
+.code-copy { color: #c6cedb; border-color: rgba(255, 255, 255, .14); }
+.code-copy:hover { background: rgba(255, 255, 255, .06); }
+.code-drawer-meta {
+  display: flex; gap: 12px; padding: 8px 16px; font-size: 11.5px;
+  color: #8b96a5; border-bottom: 1px solid rgba(255, 255, 255, .06);
+}
+.code-drawer-warn { color: #e0b341; }
+.code-drawer-body { flex: 1; overflow: auto; padding: 8px 0 24px; }
+.code-drawer-note, .code-drawer-error { padding: 20px 16px; font-size: 13px; }
+.code-drawer-error { color: #f28b82; }
+.code-drawer-code pre,
+.code-drawer-plain {
+  margin: 0; padding: 8px 16px; font-size: 12.5px; line-height: 1.6;
+  font-family: ui-monospace, SFMono-Regular, Consolas, "Courier New", monospace;
+}
+.code-drawer-code .shiki { background: transparent !important; }
+.code-drawer-code .shiki code { counter-reset: code-line; display: block; }
+.code-drawer-code .shiki .line { display: block; }
+.code-drawer-code .shiki .line::before {
+  counter-increment: code-line; content: counter(code-line);
+  display: inline-block; width: 3.2em; margin-right: 12px; text-align: right;
+  color: #5b6472; user-select: none;
+}
+.code-drawer-plain { white-space: pre; color: #d7dde7; }

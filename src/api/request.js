@@ -102,4 +102,64 @@ export async function request(path, opts = {}) {
   return json ? json.data : undefined
 }
 
+// 文件上传必须用 XHR：fetch 无法上报上传进度。
+// 其余行为与 request 对齐：注入 token、解包 Result、401 刷新后重试一次。
+export function uploadRequest(path, formData, opts = {}) {
+  const { onProgress, headers = {}, auth = true, retry = true } = opts
+
+  const send = () => new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    const h = { ...headers }
+    const tokens = getTokens()
+    if (auth && !h.Authorization && tokens?.accessToken) {
+      h.Authorization = `Bearer ${tokens.accessToken}`
+    }
+    xhr.open('POST', `${BASE}${path}`, true)
+    Object.entries(h).forEach(([key, value]) => {
+      if (value != null) xhr.setRequestHeader(key, value)
+    })
+    if (onProgress) {
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable && e.total > 0) {
+          onProgress(Math.min(100, Math.round((e.loaded / e.total) * 100)))
+        }
+      }
+    }
+    xhr.onload = () => {
+      let json = null
+      try {
+        const text = xhr.responseText
+        json = text ? JSON.parse(text.replace(LONG_FIELD, '$1"$2"')) : null
+      } catch {
+        json = null
+      }
+      const ok = xhr.status >= 200 && xhr.status < 300
+      const code = json?.code ?? (ok ? 0 : xhr.status)
+      let message = json?.message ?? (ok ? '' : `请求失败(${xhr.status})`)
+      if (xhr.status === 413) {
+        message = '文件超过服务器允许的上传上限（500MB），请压缩后重试'
+      }
+      resolve({ status: xhr.status, json, code, message })
+    }
+    xhr.onerror = () => reject(new ApiError(0, '网络错误：无法连接服务器', 0))
+    xhr.onabort = () => reject(new ApiError(-1, '请求已取消', 0))
+    xhr.send(formData)
+  })
+
+  return (async () => {
+    let r = await send()
+    const unauthorized = r.status === 401 || r.code === 401
+    if (unauthorized && auth && retry) {
+      const renewed = await refreshTokens()
+      if (renewed) {
+        r = await send()
+      } else {
+        throw new ApiError(r.code, r.message || '登录已失效，请重新登录', r.status)
+      }
+    }
+    if (r.code !== 0) throw new ApiError(r.code, r.message, r.status)
+    return r.json ? r.json.data : undefined
+  })()
+}
+
 export const getBase = () => BASE

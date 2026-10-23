@@ -2,8 +2,14 @@ import { useEffect, useRef, useState } from 'react'
 import { IconX, IconUpload } from '../icons'
 
 const GITURL_RE = /^https?:\/\/\S+$/
+const MAX_UPLOAD_MB = 500
+const MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1024 * 1024
+const newIdempotencyKey = () =>
+  globalThis.crypto?.randomUUID?.() ?? `idem-${Date.now()}-${Math.random().toString(36).slice(2)}`
+const formatSize = (bytes) =>
+  bytes >= 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)}MB` : `${Math.ceil(bytes / 1024)}KB`
 
-// 新建项目弹窗：POST /api/project（name 1-50 必填），可选附带 zip 上传 + 创建后立即分析
+// 新建项目弹窗：POST /api/project/with-source（有源码）或 /api/project（无源码）
 export default function NewProjectModal({ open, onClose, onCreate }) {
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
@@ -12,12 +18,16 @@ export default function NewProjectModal({ open, onClose, onCreate }) {
   const [autoAnalyze, setAutoAnalyze] = useState(true)
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [progress, setProgress] = useState(0)
   const inputRef = useRef(null)
   const fileRef = useRef(null)
+  const idemRef = useRef('')
 
   useEffect(() => {
     if (open) {
       setError('')
+      setProgress(0)
+      idemRef.current = newIdempotencyKey()
       inputRef.current?.focus()
     }
   }, [open])
@@ -41,6 +51,11 @@ export default function NewProjectModal({ open, onClose, onCreate }) {
       setFile(null)
       return
     }
+    if (f.size > MAX_UPLOAD_BYTES) {
+      setError(`压缩包不能超过 ${MAX_UPLOAD_MB}MB（当前 ${formatSize(f.size)}）`)
+      setFile(null)
+      return
+    }
     setError('')
     setFile(f)
   }
@@ -57,20 +72,25 @@ export default function NewProjectModal({ open, onClose, onCreate }) {
     if (description.length > 200) return setError('项目描述不能超过 200 字')
     if (gitUrl.trim() && !GITURL_RE.test(gitUrl.trim())) return setError('Git 地址需以 http(s):// 开头')
     setSubmitting(true)
+    setProgress(0)
     try {
       await onCreate({
         name: n,
         description: description.trim(),
         gitUrl: gitUrl.trim(),
         file,
-        autoAnalyze: autoAnalyze && !!file
-      })
+        autoAnalyze: autoAnalyze && !!file,
+        idempotencyKey: idemRef.current
+      }, setProgress)
       setName('')
       setDescription('')
       setGitUrl('')
       setFile(null)
+      setProgress(0)
+      idemRef.current = newIdempotencyKey()
       onClose()
     } catch (err) {
+      // 失败保留 idemRef：重试复用同一个幂等键，服务端不会重复建项目
       setError(err?.message || '新建项目失败，请重试')
     } finally {
       setSubmitting(false)
@@ -128,11 +148,12 @@ export default function NewProjectModal({ open, onClose, onCreate }) {
           ) : (
             <div className="file-picked">
               <span className="file-name">{file.name}</span>
+              <span className="file-size">{formatSize(file.size)}</span>
               <button type="button" className="file-clear" onClick={clearFile}>移除</button>
             </div>
           )}
           <input ref={fileRef} type="file" accept=".zip" hidden onChange={pickFile} />
-          <span className="field-hint">不选择也创建项目，之后可在项目详情里补传</span>
+          <span className="field-hint">不选择也创建项目，之后可在项目详情里补传；单个 ZIP 不超过 {MAX_UPLOAD_MB}MB</span>
         </div>
 
         <label className="checkbox-row">
@@ -147,8 +168,14 @@ export default function NewProjectModal({ open, onClose, onCreate }) {
 
         {error && <div className="modal-error">{error}</div>}
 
+        {submitting && file && (
+          <div className="upload-progress" role="progressbar" aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100}>
+            <div className="upload-progress-bar" style={{ width: `${progress}%` }} />
+          </div>
+        )}
+
         <button className="btn-primary modal-submit" type="submit" disabled={submitting}>
-          {submitting ? '创建中…' : '创建项目'}
+          {submitting ? (file ? `上传中 ${progress}%` : '创建中…') : '创建项目'}
         </button>
       </form>
     </div>

@@ -79,7 +79,7 @@ function Relations({ relations, loading, onSelect }) {
   )
 }
 
-export default function ClassExplorer({ projectId }) {
+export default function ClassExplorer({ projectId, onOpenCode }) {
   const [classes, setClasses] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -119,7 +119,7 @@ export default function ClassExplorer({ projectId }) {
     <div className="pd-section">
       <div className="pd-section-head">
         <h2 className="pd-section-title">代码探索</h2>
-        <span className="pd-section-note">点击类查看调用 / 依赖 / 继承关系</span>
+        <span className="pd-section-note">点击类查看调用 / 依赖 / 继承关系；双击查看源码</span>
       </div>
 
       {loading ? (
@@ -139,7 +139,8 @@ export default function ClassExplorer({ projectId }) {
                     key={c.qualifiedName}
                     className={`ce-class ${selected === c.qualifiedName ? 'active' : ''}`}
                     onClick={() => selectClass(c.qualifiedName)}
-                    title={c.qualifiedName}
+                    onDoubleClick={() => onOpenCode?.(c.qualifiedName, c.simpleName)}
+                    title={`${c.qualifiedName}（双击查看源码）`}
                   >
                     <span className={`ce-kind ${c.description ? 'core' : ''}`}>{kindMark(c.kind)}</span>
                     <span className="ce-body">

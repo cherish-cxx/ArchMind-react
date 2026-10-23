@@ -1,4 +1,5 @@
-import { statusMeta } from '../statusMeta'
+import { statusMeta, stageLabel } from '../statusMeta'
+import { normalizeCategory } from '../utils/techStack'
 import ClassExplorer from './ClassExplorer'
 import {
   IconArrowLeft, IconUpload, IconRefresh, IconTrash, IconX
@@ -38,7 +39,7 @@ function DomainPreview({ overview }) {
                 {stack.map((t) => (
                   <span key={t.name} className="chip">
                     {t.name}
-                    {t.category ? <em className="chip-cat">{t.category}</em> : null}
+                    {t.category ? <em className="chip-cat">{normalizeCategory(t.category)}</em> : null}
                   </span>
                 ))}
               </div>
@@ -64,8 +65,8 @@ function DomainPreview({ overview }) {
 }
 
 export default function ProjectDetail({
-  project, overview, loading, analyzing, error,
-  onBack, onUpload, onAnalyze, onDelete
+  project, overview, loading, analyzing, taskProgress = 0, taskStage = '', error,
+  onBack, onUpload, onAnalyze, onOpenCode, onDelete
 }) {
   if (!project) {
     return (
@@ -105,7 +106,7 @@ export default function ProjectDetail({
             title={hasSource ? '重新分析（覆盖旧的概况结果）' : '需先上传源码'}
           >
             <IconRefresh size={14} />
-            {analyzing ? '分析中…' : '重新分析'}
+            {analyzing ? `分析中 ${taskProgress}%` : '重新分析'}
           </button>
           <button className="btn-ghost pd-btn danger" onClick={onDelete}>
             <IconTrash size={14} />
@@ -113,6 +114,17 @@ export default function ProjectDetail({
           </button>
         </div>
       </div>
+
+      {analyzing && (
+        <div className="pd-progress">
+          <div className="pd-progress-track">
+            <div className="pd-progress-bar" style={{ width: `${Math.max(taskProgress, 2)}%` }} />
+          </div>
+          <span className="pd-progress-text">
+            {stageLabel(taskStage) || '分析中'} · {taskProgress}%
+          </span>
+        </div>
+      )}
 
       {error && (
         <div className="pd-error">
@@ -167,7 +179,7 @@ export default function ProjectDetail({
 
           <DomainPreview overview={overview} />
 
-          <ClassExplorer projectId={project.id} />
+          <ClassExplorer projectId={project.id} onOpenCode={onOpenCode} />
         </>
       )}
     </div>

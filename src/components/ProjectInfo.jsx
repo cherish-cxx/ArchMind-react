@@ -1,4 +1,6 @@
 import { IconRefresh } from '../icons'
+import { stageLabel } from '../statusMeta'
+import { splitTechStack } from '../utils/techStack'
 
 function fmtSize(bytes) {
   if (!bytes) return ''
@@ -19,7 +21,8 @@ function Cell({ label, children }) {
 }
 
 export default function ProjectInfo({
-  loggedIn, currentProject, hasProjects, uploadInfo, overview, analyzing, error, onAnalyze
+  loggedIn, currentProject, hasProjects, uploadInfo, overview, analyzing,
+  taskProgress = 0, taskStage = '', error, onAnalyze
 }) {
   if (!loggedIn) {
     return (
@@ -41,9 +44,8 @@ export default function ProjectInfo({
   const projectName = currentProject?.name
   const canAnalyze = !!currentProject
 
-  // 概况字段对齐后端 ProjectOverviewResponse（无 projectName / source 字段）
-  const lang = overview?.techStack?.find((t) => t.category === '语言')
-  const stack = overview?.techStack?.filter((t) => t.category !== '语言').slice(0, 4) ?? []
+  // 概况字段对齐后端 ProjectOverviewResponse；语言缺失时用 file.language 聚合兜底
+  const { language, stack } = splitTechStack(overview?.techStack, overview?.languages)
 
   if (error) {
     return (
@@ -93,6 +95,10 @@ export default function ProjectInfo({
           <div className="skl skl-name" />
           <div className="skl skl-line" style={{ width: '46%' }} />
         </div>
+        <div className="pi-module">
+          <span className="pi-label">分析进度</span>
+          <span className="pi-value">{stageLabel(taskStage) || '准备中'} · {taskProgress}%</span>
+        </div>
         {SKELETON_CELLS.map((label, i) => (
           <div className="pi-module" key={label}>
             <span className="pi-label">{label}</span>
@@ -133,7 +139,7 @@ export default function ProjectInfo({
         <p className="pi-desc">{overview.summary}</p>
       </div>
 
-      <Cell label="开发语言">{lang?.name ?? '—'}</Cell>
+      <Cell label="开发语言">{language}</Cell>
 
       <div className="pi-module">
         <span className="pi-label">技术栈</span>
@@ -148,7 +154,9 @@ export default function ProjectInfo({
         <span className="pi-label">同步状态</span>
         <span className="pi-value sync">
           <span className={analyzing ? 'dot-busy' : 'dot-success'} />
-          {analyzing ? '分析中…' : syncedText}
+          {analyzing
+            ? `分析中 ${taskProgress}%${taskStage ? ` · ${stageLabel(taskStage)}` : ''}`
+            : syncedText}
         </span>
       </div>
 

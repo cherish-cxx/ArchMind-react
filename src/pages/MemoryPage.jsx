@@ -92,10 +92,13 @@ export default function MemoryPage({
   overview,
   analyzing,
   analyzeError,
+  taskProgress = 0,
+  taskStage = '',
   uploadInfo,
   onOpenProject,
   onAnalyze,
   onUpload,
+  onOpenCode,
   onOpenLogin,
   onGoProjects
 }) {
@@ -368,7 +371,9 @@ export default function MemoryPage({
   const handleNodeClick = useCallback((uid) => {
     const clazz = classes.find((c) => c.qualifiedName === uid)
     selectClass(clazz || { qualifiedName: uid, simpleName: simpleName(uid) })
-  }, [classes, selectClass])
+    // 点节点同时打开代码抽屉：聚焦与看源码是同一动作的两面
+    onOpenCode?.(uid, clazz?.simpleName)
+  }, [classes, selectClass, onOpenCode])
 
   const handleRelayout = useCallback(() => {
     const state = getGraphState()
@@ -621,6 +626,8 @@ export default function MemoryPage({
           uploadInfo={uploadInfo}
           overview={overview}
           analyzing={analyzing}
+          taskProgress={taskProgress}
+          taskStage={taskStage}
           error={analyzeError}
           onAnalyze={onAnalyze}
         />
