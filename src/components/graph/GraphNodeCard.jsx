@@ -4,7 +4,7 @@ import { NODE_W, NODE_H } from '../../graph/layout'
  * 一个类节点。方法不是节点 —— V1 的图粒度是类级，
  * 方法只会通过 citation 落在 owner 类的详情里。
  */
-export default function GraphNodeCard({ node, selected, focused, hasGap, onPath, onClick }) {
+export default function GraphNodeCard({ node, selected, focused, hasGap, onPath, onClick, onOpen }) {
   const kind = (node.kind || 'CLASS').toLowerCase()
   const edgeCount = node.edgeCount ?? 0
 
@@ -29,6 +29,12 @@ export default function GraphNodeCard({ node, selected, focused, hasGap, onPath,
       onClick={(e) => {
         e.stopPropagation()
         onClick?.(node.uid)
+        // 键盘触发的 click 没有 detail，双击事件也不会来，直接开窗兜底
+        if (e.detail === 0) onOpen?.(node.uid)
+      }}
+      onDoubleClick={(e) => {
+        e.stopPropagation()
+        onOpen?.(node.uid)
       }}
       onMouseDown={(e) => e.stopPropagation()}
     >

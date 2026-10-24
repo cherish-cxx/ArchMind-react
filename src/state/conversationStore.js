@@ -97,6 +97,9 @@ export function appendAgentMessage(response) {
     id: nextId(),
     role: 'agent',
     text: response?.message ?? '',
+    // 逐段渲染的真相源；降级时 sections 为空，回落到 text。
+    headline: response?.headline ?? null,
+    sections: response?.sections ?? [],
     citations: response?.citations ?? [],
     suggestions: response?.suggestions ?? [],
     steps: response?.steps ?? [],

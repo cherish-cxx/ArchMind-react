@@ -23,7 +23,7 @@ const REQUEST_TIMEOUT_MS = 95000
  * 两轮并发会让后写的那次覆盖前一次（焦点栈/历史一起丢）。
  * 用 ref 而不是 state 做闸门，是因为两次点击可能发生在同一次 render 之前。
  */
-export function useAgentChat({ projectId, getFocus, onGraph, beforeSend }) {
+export function useAgentChat({ projectId, getFocus, getMethodUid, onGraph, beforeSend }) {
   const conversation = useConversationState()
   const abortRef = useRef(null)
   const inFlightRef = useRef(false)
@@ -34,7 +34,7 @@ export function useAgentChat({ projectId, getFocus, onGraph, beforeSend }) {
     prepareProject(projectId)
   }, [projectId])
 
-  const run = useCallback(async (message, { echo = true, focusOverride } = {}) => {
+  const run = useCallback(async (message, { echo = true, focusOverride, methodUidOverride } = {}) => {
     if (!projectId || inFlightRef.current) return { ok: false, reason: 'busy' }
     const text = (message || '').trim()
     if (!text) return { ok: false, reason: 'empty' }
@@ -44,7 +44,8 @@ export function useAgentChat({ projectId, getFocus, onGraph, beforeSend }) {
     setConversationError(null)
 
     const focus = focusOverride !== undefined ? focusOverride : (getFocus?.() || null)
-    lastRequestRef.current = { message: text, focus }
+    const methodUid = methodUidOverride !== undefined ? methodUidOverride : (getMethodUid?.() || null)
+    lastRequestRef.current = { message: text, focus, methodUid }
     if (echo) appendUserMessage(text)
 
     const controller = new AbortController()
@@ -68,6 +69,7 @@ export function useAgentChat({ projectId, getFocus, onGraph, beforeSend }) {
         message: text,
         conversationId: conversation.conversationId,
         focus,
+        methodUid,
         signal: controller.signal
       })
       appendAgentMessage(response)
@@ -92,7 +94,7 @@ export function useAgentChat({ projectId, getFocus, onGraph, beforeSend }) {
       inFlightRef.current = false
       setPending(false)
     }
-  }, [projectId, conversation.conversationId, getFocus, onGraph, beforeSend])
+  }, [projectId, conversation.conversationId, getFocus, getMethodUid, onGraph, beforeSend])
 
   const send = useCallback((text) => run(text, { echo: true }), [run])
 
@@ -100,7 +102,11 @@ export function useAgentChat({ projectId, getFocus, onGraph, beforeSend }) {
   const retry = useCallback(() => {
     const last = lastRequestRef.current
     if (!last) return
-    return run(last.message, { echo: false, focusOverride: last.focus })
+    return run(last.message, {
+      echo: false,
+      focusOverride: last.focus,
+      methodUidOverride: last.methodUid
+    })
   }, [run])
 
   const cancel = useCallback(() => {

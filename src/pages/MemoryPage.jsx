@@ -70,6 +70,13 @@ function inferStarCenter(patch) {
   return best && best[1] === edges.length ? best[0] : null
 }
 
+function hasRelation(state, uid) {
+  for (const e of state.edges.values()) {
+    if (e.from === uid || e.to === uid) return true
+  }
+  return false
+}
+
 /**
  * 类清单缓存放在模块级，而不是组件 ref 里：
  * React StrictMode 在开发环境会卸载重挂组件，ref 会跟着重置，
@@ -100,7 +107,9 @@ export default function MemoryPage({
   onUpload,
   onOpenCode,
   onOpenLogin,
-  onGoProjects
+  onGoProjects,
+  methodFocus,
+  onClearMethodFocus
 }) {
   const graph = useGraphState()
   const projectId = currentProject?.id || null
@@ -337,8 +346,17 @@ export default function MemoryPage({
     const uid = clazz?.qualifiedName || clazz?.uid
     if (!uid || !projectId) return
 
+    // 换到别的类时，旧的方法锁已过期 —— 否则会出现「问 A 类、拿 B 的方法答」
+    if (methodFocus && methodFocus.uid.split('#', 1)[0] !== uid) {
+      onClearMethodFocus?.()
+    }
+
     const seq = ++selectSeq.current
     const before = getGraphState()
+    // 原生双击必然先触发两次 click：已聚焦且有关系的节点不重复拉取、不重复布局
+    const settled = before.focusUid === uid
+      && before.selectedUid === uid
+      && hasRelation(before, uid)
     const meta = classToNode(clazz) || {
       uid,
       name: clazz?.simpleName || simpleName(uid)
@@ -347,6 +365,11 @@ export default function MemoryPage({
     ensureGraphNode(uid, meta)
     setGraphFocus(uid)
     setGraphSelected(uid)
+
+    if (settled) {
+      centerOnNode(uid)
+      return
+    }
 
     let state = getGraphState()
     if (!Number.isFinite(state.nodes.get(uid)?.x)) {
@@ -366,14 +389,18 @@ export default function MemoryPage({
     } catch {
       // 关系查询失败时保留单节点：选类本身仍然成立，不弹错打断探索。
     }
-  }, [projectId, centerOnNode, mergeRelations])
+  }, [projectId, centerOnNode, mergeRelations, methodFocus, onClearMethodFocus])
 
   const handleNodeClick = useCallback((uid) => {
     const clazz = classes.find((c) => c.qualifiedName === uid)
     selectClass(clazz || { qualifiedName: uid, simpleName: simpleName(uid) })
-    // 点节点同时打开代码抽屉：聚焦与看源码是同一动作的两面
+  }, [classes, selectClass])
+
+  // 双击才看源码。单击已经把节点设为焦点，这里只负责打开窗口。
+  const handleNodeOpen = useCallback((uid) => {
+    const clazz = classes.find((c) => c.qualifiedName === uid)
     onOpenCode?.(uid, clazz?.simpleName)
-  }, [classes, selectClass, onOpenCode])
+  }, [classes, onOpenCode])
 
   const handleRelayout = useCallback(() => {
     const state = getGraphState()
@@ -507,6 +534,9 @@ export default function MemoryPage({
     [graph.focusUid]
   )
 
+  // 方法锁是独立锚点：画布仍停在类上，提问时额外带上方法 uid
+  const getMethodUid = useCallback(() => methodFocus?.uid || null, [methodFocus])
+
   // 图/焦点变化后 400ms 上报整屏快照；flush 在发问前把屏幕先刷上去。
   const { flush: flushViewport } = useViewportReporter({
     projectId,
@@ -522,6 +552,7 @@ export default function MemoryPage({
   } = useAgentChat({
     projectId,
     getFocus,
+    getMethodUid,
     onGraph: applyAgentResponse,
     beforeSend: flushViewport
   })
@@ -640,6 +671,7 @@ export default function MemoryPage({
             setView={setView}
             fitSignal={fitSignal}
             onNodeClick={handleNodeClick}
+            onNodeOpen={handleNodeOpen}
             onBackgroundClick={() => setGraphSelected(null)}
           />
 
@@ -691,6 +723,8 @@ export default function MemoryPage({
         navigating={navigating}
         onCitation={handleCitation}
         onClearFocus={handleClearFocus}
+        methodFocus={methodFocus}
+        onClearMethodFocus={onClearMethodFocus}
       />
     </main>
   )

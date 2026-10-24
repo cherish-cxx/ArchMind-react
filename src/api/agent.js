@@ -122,10 +122,11 @@ function bodyWithProjectId(projectId, fields) {
  * @param {string} params.message
  * @param {string|null} [params.conversationId] 不传 = 新会话
  * @param {import('./agentTypes.js').NodeRef|null} [params.focus]
+ * @param {string|null} [params.methodUid] 源码大纲里锁定的方法（owner#signature）
  * @param {AbortSignal} [params.signal]
  * @returns {Promise<import('./agentTypes.js').AgentResponse>}
  */
-export async function ask({ projectId, message, conversationId = null, focus = null, signal }) {
+export async function ask({ projectId, message, conversationId = null, focus = null, methodUid = null, signal }) {
   const text = (message ?? '').trim()
   if (!text) throw new Error('消息不能为空')
   const data = await request('/api/agent/ask', {
@@ -134,7 +135,8 @@ export async function ask({ projectId, message, conversationId = null, focus = n
     body: bodyWithProjectId(projectId, {
       message: text,
       conversationId: conversationId || null,
-      focus: toNodeRef(focus)
+      focus: toNodeRef(focus),
+      methodUid: methodUid || null
     })
   })
   return normalizeAgentResponse(data)

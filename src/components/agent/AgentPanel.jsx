@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import MarkdownMessage, { MarkdownBody } from './MarkdownMessage'
 import {
   IconSend,
   IconBot,
@@ -37,6 +38,19 @@ function StepList({ steps, meta }) {
   )
 }
 
+function CitationChip({ uid, kind, onCitation }) {
+  return (
+    <button
+      className="citation-chip"
+      title={uid}
+      onClick={() => onCitation?.(uid)}
+    >
+      <span className="citation-kind">{kind === 'METHOD' ? 'M' : 'C'}</span>
+      {shortUid(uid)}
+    </button>
+  )
+}
+
 function AgentMessage({
   message, isLast, pending, onSuggestion, onCitation, onRetry, onNewConversation
 }) {
@@ -55,27 +69,56 @@ function AgentMessage({
   const showSuggestions =
     isLast && !pending && !message.error && (message.suggestions || []).length > 0
 
+  // 段落是引用的最小单位：chip 挂在它所在的那一段下面，而不是整条消息底部。
+  const sections = message.sections || []
+  const hasSections = sections.length > 0
+  // 顶层 citations 只有 uid + kind，段落里只有 uid —— 这里补回 kind
+  const kinds = new Map((message.citations || []).map((c) => [c.uid, c.kind]))
+
   return (
     <div className={`msg agent ${message.error ? 'msg-error' : ''}`}>
       <span className="msg-avatar"><IconBot size={13} /></span>
       <div className="msg-content">
-        <div className="msg-bubble">{message.text}</div>
-
-        {(message.citations || []).length > 0 && (
-          <div className="msg-citations">
-            <span className="msg-label">来源</span>
-            {message.citations.map((c) => (
-              <button
-                key={`${c.kind}:${c.uid}`}
-                className="citation-chip"
-                title={c.uid}
-                onClick={() => onCitation?.(c.uid)}
-              >
-                <span className="citation-kind">{c.kind === 'METHOD' ? 'M' : 'C'}</span>
-                {shortUid(c.uid)}
-              </button>
+        {hasSections ? (
+          <div className="msg-bubble msg-markdown msg-sections">
+            {message.headline && <h2 className="msg-headline">{message.headline}</h2>}
+            {sections.map((s, i) => (
+              <section className="msg-section" key={`${i}:${s.title || ''}`}>
+                {s.title && <h3 className="msg-section-title">{s.title}</h3>}
+                <MarkdownBody text={s.body} />
+                {(s.citedUids || []).length > 0 && (
+                  <div className="msg-section-cites">
+                    {s.citedUids.map((uid) => (
+                      <CitationChip
+                        key={uid}
+                        uid={uid}
+                        kind={kinds.get(uid)}
+                        onCitation={onCitation}
+                      />
+                    ))}
+                  </div>
+                )}
+              </section>
             ))}
           </div>
+        ) : (
+          <>
+            <MarkdownMessage text={message.text} />
+
+            {(message.citations || []).length > 0 && (
+              <div className="msg-citations">
+                <span className="msg-label">来源</span>
+                {message.citations.map((c) => (
+                  <CitationChip
+                    key={`${c.kind}:${c.uid}`}
+                    uid={c.uid}
+                    kind={c.kind}
+                    onCitation={onCitation}
+                  />
+                ))}
+              </div>
+            )}
+          </>
         )}
 
         <StepList steps={message.steps} meta={message.meta} />
@@ -143,7 +186,9 @@ export default function AgentPanel({
   canBack,
   navigating,
   onCitation,
-  onClearFocus
+  onClearFocus,
+  methodFocus,
+  onClearMethodFocus
 }) {
   const [input, setInput] = useState('')
   const [elapsed, setElapsed] = useState(0)
@@ -319,6 +364,15 @@ export default function AgentPanel({
             <button className="anchor-clear" onClick={onClearFocus} title="清除锚点">×</button>
           </div>
         )}
+        {methodFocus && (
+          <div className="anchor-chip method-chip">
+            <span className="anchor-label">方法</span>
+            <span className="anchor-name" title={methodFocus.uid}>
+              {methodFocus.name || shortUid(methodFocus.uid)}
+            </span>
+            <button className="anchor-clear" onClick={onClearMethodFocus} title="取消方法锁定">×</button>
+          </div>
+        )}
         <div className="input-row">
           <textarea
             rows={2}
@@ -328,6 +382,8 @@ export default function AgentPanel({
                 ? '先选择一个项目'
                 : sessionExpired
                   ? '对话已过期，请开始新对话'
+                  : methodFocus
+                  ? `问问 ${methodFocus.name || shortUid(methodFocus.uid)}…`
                   : focusLabel
                     ? `问问 ${focusLabel}…`
                     : '先点一个类，或问「这个项目是干嘛的」'

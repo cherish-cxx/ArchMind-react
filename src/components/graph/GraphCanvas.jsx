@@ -19,6 +19,7 @@ export default function GraphCanvas({
   setView,
   fitSignal = 0,
   onNodeClick,
+  onNodeOpen,
   onBackgroundClick
 }) {
   const containerRef = useRef(null)
@@ -165,6 +166,7 @@ export default function GraphCanvas({
             hasGap={gapOwners.has(n.uid)}
             onPath={graph.pathUids?.has(n.uid)}
             onClick={onNodeClick}
+            onOpen={onNodeOpen}
           />
         ))}
 
@@ -185,7 +187,7 @@ export default function GraphCanvas({
         ))}
       </div>
 
-      <div className="graph-canvas-hint">拖动平移 · 滚轮缩放</div>
+      <div className="graph-canvas-hint">拖动平移 · 滚轮缩放 · 双击节点看源码</div>
     </div>
   )
 }

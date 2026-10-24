@@ -39,6 +39,9 @@ export default function App() {
   const [taskStage, setTaskStage] = useState('')
   const [uploadInfo, setUploadInfo] = useState(null)
   const [codeTarget, setCodeTarget] = useState(null)
+  // 源码大纲里锁定的方法：{uid, name, signature} | null。
+  // 和画布焦点是**两个锚点** —— 这个只决定「问的是哪个方法」。
+  const [methodFocus, setMethodFocus] = useState(null)
 
   const analyzeSeq = useRef(0) // 使切换项目/退出后在途的分析请求作废
   const currentProjectRef = useRef(null)
@@ -204,17 +207,20 @@ export default function App() {
     setPage(p)
   }, [])
 
-  // 打开代码抽屉：图谱节点 / 代码探索列表共用
+  // 打开代码浮窗：图谱节点 / 代码探索列表共用
   const handleOpenCode = useCallback((uid, simpleName) => {
     const projectId = currentProjectRef.current?.id
     if (!projectId || !uid) return
     setCodeTarget({ projectId, uid, name: simpleName })
+    // 换到别的类看源码，旧的方法锁不再适用；同一个类则保留，避免反复锁同一方法
+    setMethodFocus((prev) => (prev && prev.uid.split('#', 1)[0] === uid ? prev : null))
   }, [])
 
   const openProject = useCallback((project) => {
     analyzeSeq.current++ // 作废在途分析
     stopTaskPolling()
     setCodeTarget(null)
+    setMethodFocus(null)
     setCurrentProject(project)
     resetOverview()
     setPage('detail')
@@ -227,6 +233,7 @@ export default function App() {
     analyzeSeq.current++
     stopTaskPolling()
     setCodeTarget(null)
+    setMethodFocus(null)
     setCurrentProject(project)
     resetOverview()
     loadDbOverview(project.id)
@@ -392,6 +399,8 @@ export default function App() {
           onOpenCode={handleOpenCode}
           onOpenLogin={() => setLoginOpen(true)}
           onGoProjects={() => setPage('projects')}
+          methodFocus={methodFocus}
+          onClearMethodFocus={() => setMethodFocus(null)}
         />
       ) : (
         <main className="main">
@@ -454,7 +463,9 @@ export default function App() {
         projectId={codeTarget?.projectId}
         uid={codeTarget?.uid}
         name={codeTarget?.name}
-        onClose={() => setCodeTarget(null)}
+        activeMethodUid={methodFocus?.uid}
+        onLockMethod={(m) => setMethodFocus((prev) => (prev?.uid === m.uid ? null : m))}
+        onClose={() => { setCodeTarget(null); setMethodFocus(null) }}
       />
     </div>
   )
