@@ -19,7 +19,9 @@ function toNode(clazz) {
     name: clazz.simpleName || simpleName(clazz.qualifiedName),
     kind: clazz.kind,
     packageName: clazz.packageName,
-    description: clazz.description || undefined
+    description: clazz.description || undefined,
+    isAbstract: clazz.isAbstract ?? undefined,
+    core: clazz.core ?? undefined
   }
 }
 

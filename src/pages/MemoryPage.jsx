@@ -50,6 +50,7 @@ import {
 } from '../state/persistence'
 import { useViewportReporter } from '../hooks/useViewportReporter'
 import { useAgentChat } from '../hooks/useAgentChat'
+import { useClassDescriptions } from '../hooks/useClassDescriptions'
 
 /**
  * Agent 的图 patch 没有中心标记。类关系形状天然是星形（所有边都连着中心），
@@ -541,6 +542,12 @@ export default function MemoryPage({
   const { flush: flushViewport } = useViewportReporter({
     projectId,
     enabled: loggedIn && !!projectId
+  })
+
+  // 节点进入画布且没有描述时按需补齐；不阻塞渲染，失败了就保持无描述。
+  useClassDescriptions({
+    projectId,
+    enabled: loggedIn && !!projectId && !analyzing
   })
 
   const {

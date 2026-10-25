@@ -142,7 +142,7 @@ export default function ClassExplorer({ projectId, onOpenCode }) {
                     onDoubleClick={() => onOpenCode?.(c.qualifiedName, c.simpleName)}
                     title={`${c.qualifiedName}（双击查看源码）`}
                   >
-                    <span className={`ce-kind ${c.description ? 'core' : ''}`}>{kindMark(c.kind)}</span>
+                    <span className={`ce-kind ${(c.core ?? Boolean(c.description)) ? 'core' : ''}`}>{kindMark(c.kind)}</span>
                     <span className="ce-body">
                       <span className="ce-simple">{c.simpleName}</span>
                       {c.description && <span className="ce-desc">{c.description}</span>}

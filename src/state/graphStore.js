@@ -1,11 +1,13 @@
 import { useSyncExternalStore } from 'react'
 import {
+  applyDescriptions,
   applyPatch,
   clearGraph,
   createGraphState,
   deserializeGraph,
   ensureNode,
   serializeGraph,
+  setDescriptionsPending,
   setFocus,
   setNodePositions,
   setPath,
@@ -80,6 +82,16 @@ export function setGraphPath(uids) {
 /** 布局层算完坐标后写回。 */
 export function applyNodePositions(positions) {
   commit(setNodePositions(state, positions))
+}
+
+/** 按需描述返回后合并（不动坐标）。 */
+export function applyNodeDescriptions(items) {
+  commit(applyDescriptions(state, items))
+}
+
+/** 标记 / 清除「描述生成中」。 */
+export function setGraphDescriptionsPending(uids, pending) {
+  commit(setDescriptionsPending(state, uids, pending))
 }
 
 /** 从持久化快照恢复（P3 用）。 */

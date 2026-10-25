@@ -28,6 +28,8 @@ const META_KEYS = [
   'viaFanout',
   'edgeCount',
   'description',
+  'isAbstract',
+  'core',
   'x',
   'y'
 ]
@@ -73,6 +75,8 @@ export function createGraphState() {
     selectedUid: null,
     // SHOW_PATH 的高亮集合。是视图状态，不进 localStorage。
     pathUids: new Set(),
+    // 正在按需生成描述的节点。同样是视图状态，不进快照。
+    pendingDescriptions: new Set(),
     truncated: false
   }
 }
@@ -232,6 +236,49 @@ export function setNodePositions(state, positions) {
     nodes.set(uid, { ...old, x: pos.x, y: pos.y })
   }
   return nodes ? { ...state, nodes } : state
+}
+
+/**
+ * 按需描述返回后合并进来。只更新已存在的节点、不动坐标；
+ * 空描述按「没生成」处理，不覆盖旧值。
+ */
+export function applyDescriptions(state, items) {
+  if (!Array.isArray(items) || items.length === 0) return state
+  let nodes = null
+  for (const item of items) {
+    if (!item?.uid || !item.description) continue
+    const uid = resolveGraphUid(item.uid)
+    const old = state.nodes.get(uid)
+    if (!old) continue
+    const next = {
+      ...old,
+      description: item.description,
+      ...(item.core === undefined || item.core === null ? {} : { core: item.core })
+    }
+    if (next.description === old.description && next.core === old.core) continue
+    if (!nodes) nodes = new Map(state.nodes)
+    nodes.set(uid, next)
+  }
+  return nodes ? { ...state, nodes } : state
+}
+
+/** 标记 / 清除「描述生成中」。只影响卡片占位，不参与持久化。 */
+export function setDescriptionsPending(state, uids, pending) {
+  const list = [...(uids || [])].map((uid) => resolveGraphUid(uid)).filter(Boolean)
+  if (list.length === 0) return state
+  const next = new Set(state.pendingDescriptions)
+  let changed = false
+  for (const uid of list) {
+    if (pending) {
+      if (!next.has(uid)) {
+        next.add(uid)
+        changed = true
+      }
+    } else if (next.delete(uid)) {
+      changed = true
+    }
+  }
+  return changed ? { ...state, pendingDescriptions: next } : state
 }
 
 /** 给 viewport 上报用：焦点排在最前，其余按插入顺序。 */

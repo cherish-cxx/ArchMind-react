@@ -14,12 +14,12 @@
  * 所有函数只返回 `{ uid: {x, y} }`，不直接改 store。
  */
 
-export const NODE_W = 188
-export const NODE_H = 72
-export const PAD = 80
-export const COL_GAP = 260
-export const ROW_GAP = 92
-export const RING_R = 300
+export const NODE_W = 200
+export const NODE_H = 56
+export const PAD = 90
+export const COL_GAP = 310
+export const ROW_GAP = 112
+export const RING_R = 320
 
 const hasPos = (n) => Number.isFinite(n?.x) && Number.isFinite(n?.y)
 const labelOf = (n) => n?.name || n?.uid || ''
@@ -175,7 +175,7 @@ export function placeIncremental(state, uids, anchorUid) {
 
   const angles = []
   for (let i = 0; i < 12; i++) angles.push(-90 + i * 30)
-  const radii = [240, 340, 460]
+  const radii = [280, 400, 540]
 
   const positions = {}
   for (const uid of targets) {

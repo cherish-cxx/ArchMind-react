@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { boundsOf, NODE_H, NODE_W, PAD } from '../../graph/layout'
 import { ownerUid } from '../../graph/model'
 import GraphEdges from './GraphEdges'
@@ -35,6 +35,20 @@ export default function GraphCanvas({
   const gaps = [...graph.gaps.values()]
   const gapOwners = new Set(gaps.map((g) => ownerUid(g.at)))
   const edges = [...graph.edges.values()]
+
+  // 关系数按当前图实时算：后端 edgeCount 只有 call-chain 节点带，class-relations 没有。
+  const degree = useMemo(() => {
+    const map = new Map()
+    for (const e of graph.edges.values()) {
+      const from = map.get(e.from) || { in: 0, out: 0 }
+      from.out += 1
+      map.set(e.from, from)
+      const to = map.get(e.to) || { in: 0, out: 0 }
+      to.in += 1
+      map.set(e.to, to)
+    }
+    return map
+  }, [graph.edges])
 
   // 尺寸监听：适配视图和缩放都依赖它
   useEffect(() => {
@@ -161,6 +175,8 @@ export default function GraphCanvas({
           <GraphNodeCard
             key={n.uid}
             node={n}
+            degree={degree.get(n.uid)}
+            pending={graph.pendingDescriptions?.has(n.uid)}
             selected={graph.selectedUid === n.uid}
             focused={graph.focusUid === n.uid}
             hasGap={gapOwners.has(n.uid)}

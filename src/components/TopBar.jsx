@@ -97,7 +97,7 @@ export default function TopBar({
                     checked={relFilters?.[r.key] !== false}
                     onChange={() => onToggleRel?.(r.key)}
                   />
-                  <span className={`rel-dot rel-${r.key.toLowerCase()}`} />
+                  <span className={`rel-line rel-${r.key.toLowerCase()}`} />
                   <span>{r.label}</span>
                 </label>
               ))}

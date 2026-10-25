@@ -64,3 +64,10 @@ export const classRelations = (projectId, uid) =>
 export const classSource = (projectId, uid, maxLines = 2000) =>
   request(`/api/project/${projectId}/class/source?uid=${encodeURIComponent(uid)}&maxLines=${maxLines}`)
 
+// 按需生成类描述：只处理没有描述的类；force 用于画布中心节点（接口/抽象也生成）
+export const describeClasses = (projectId, uids, force = false) =>
+  request(`/api/project/${projectId}/class/descriptions`, {
+    method: 'POST',
+    body: { uids, force }
+  })
+

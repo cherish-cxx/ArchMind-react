@@ -32,7 +32,7 @@ export default function ClassPicker({
   const matches = useMemo(() => {
     if (!classes.length) return []
     if (!term) {
-      const core = classes.filter((c) => c.description)
+      const core = classes.filter((c) => (c.core ?? Boolean(c.description)))
       return (core.length ? core : classes).slice(0, 8)
     }
     const scored = []

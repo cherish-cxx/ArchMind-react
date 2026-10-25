@@ -1,10 +1,44 @@
 import { useMemo } from 'react'
+import { NODE_H, NODE_W } from '../../graph/layout'
 
-const REL_COLORS = {
-  CALLS: '#8b93a7',
-  EXTENDS: '#4f63d2',
-  IMPLEMENTS: '#3da06a',
-  DEPENDS: '#b0b4bd'
+/**
+ * 关系视觉编码：颜色 + 线型 + 箭头形状三重区分，灰度下也能辨认。
+ *
+ * 为什么不再用虚线表示扇出：虚线已经让给 DEPENDS，两个语义叠在同一个通道上
+ * 会分不清。扇出改用线上的菱形标记。
+ */
+const REL_STYLE = {
+  CALLS: { color: '#6b7280', width: 1.4, dash: undefined, hollow: false },
+  DEPENDS: { color: '#9333ea', width: 1.4, dash: '8 5', hollow: false },
+  EXTENDS: { color: '#2563eb', width: 2.6, dash: undefined, hollow: true },
+  IMPLEMENTS: { color: '#059669', width: 1.6, dash: '2 4', hollow: true }
+}
+
+const FALLBACK = REL_STYLE.CALLS
+
+/** 从节点中心沿指向方向走到矩形边界 —— 线不再压在卡片下面。 */
+function boundary(node, toward) {
+  const dx = toward.x - node.x
+  const dy = toward.y - node.y
+  if (dx === 0 && dy === 0) return { x: node.x, y: node.y }
+  const halfW = NODE_W / 2 + 2
+  const halfH = NODE_H / 2 + 2
+  const tx = dx === 0 ? Infinity : halfW / Math.abs(dx)
+  const ty = dy === 0 ? Infinity : halfH / Math.abs(dy)
+  const t = Math.min(tx, ty)
+  return { x: node.x + dx * t, y: node.y + dy * t }
+}
+
+function midOf(a, b, control) {
+  if (!control) return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }
+  return {
+    x: 0.25 * a.x + 0.5 * control.x + 0.25 * b.x,
+    y: 0.25 * a.y + 0.5 * control.y + 0.25 * b.y
+  }
+}
+
+function diamond(p, r = 4) {
+  return `${p.x},${p.y - r} ${p.x + r},${p.y} ${p.x},${p.y + r} ${p.x - r},${p.y}`
 }
 
 /**
@@ -36,18 +70,23 @@ export default function GraphEdges({ nodes, edges, bounds, filters, pathUids }) 
       viewBox={`${bounds.minX} ${bounds.minY} ${bounds.width} ${bounds.height}`}
     >
       <defs>
-        {Object.entries(REL_COLORS).map(([rel, color]) => (
+        {Object.entries(REL_STYLE).map(([rel, style]) => (
           <marker
             key={rel}
             id={`arrow-${rel}`}
-            viewBox="0 0 8 8"
-            refX="7"
-            refY="4"
-            markerWidth="7"
-            markerHeight="7"
+            viewBox="0 0 9 9"
+            refX="8"
+            refY="4.5"
+            markerWidth="9"
+            markerHeight="9"
             orient="auto-start-reverse"
           >
-            <path d="M0,0 L8,4 L0,8 z" fill={color} />
+            <path
+              d="M0,0 L9,4.5 L0,9 z"
+              fill={style.hollow ? 'none' : style.color}
+              stroke={style.color}
+              strokeWidth={style.hollow ? 1.4 : 0}
+            />
           </marker>
         ))}
       </defs>
@@ -58,21 +97,26 @@ export default function GraphEdges({ nodes, edges, bounds, filters, pathUids }) 
         const b = positioned.get(e.to)
         if (!a || !b) return null
 
-        const color = REL_COLORS[e.rel] || REL_COLORS.CALLS
-        const width = e.rel === 'CALLS' ? Math.min(3, 1 + (e.callCount || 1) * 0.35) : 1.4
+        const style = REL_STYLE[e.rel] || FALLBACK
+        const relKey = REL_STYLE[e.rel] ? e.rel : 'CALLS'
+        const width = e.rel === 'CALLS'
+          ? Math.min(3, 1 + (e.callCount || 1) * 0.35)
+          : style.width
         const cls = [
           'graph-edge',
           `rel-${String(e.rel).toLowerCase()}`,
           e.viaFanout ? 'fanout' : '',
           pathUids && pathUids.has(e.from) && pathUids.has(e.to) ? 'on-path' : ''
-        ].join(' ')
+        ].filter(Boolean).join(' ')
 
         let d
+        let mid
         if (e.from === e.to) {
           // 自环：从节点右上角绕出去，不参与节点的矩形容器。
           const x = a.x
-          const y = a.y - 50
+          const y = a.y - NODE_H / 2
           d = `M ${x - 34} ${y + 14} C ${x - 70} ${y - 55}, ${x + 70} ${y - 55}, ${x + 34} ${y + 14}`
+          mid = { x, y: y - 26 }
         } else if (directed.has(`${e.to}|${e.from}`)) {
           // 双向边：各自沿自己方向的左侧弯，合起来就是两条分开的弧。
           const mx = (a.x + b.x) / 2
@@ -82,29 +126,46 @@ export default function GraphEdges({ nodes, edges, bounds, filters, pathUids }) 
           const len = Math.hypot(vx, vy) || 1
           const px = -vy / len
           const py = vx / len
-          const bend = Math.min(64, 22 + len * 0.12)
-          d = `M ${a.x} ${a.y} Q ${mx + px * bend} ${my + py * bend} ${b.x} ${b.y}`
+          const bend = Math.min(72, 26 + len * 0.12)
+          const control = { x: mx + px * bend, y: my + py * bend }
+          const start = boundary(a, control)
+          const end = boundary(b, control)
+          d = `M ${start.x} ${start.y} Q ${control.x} ${control.y} ${end.x} ${end.y}`
+          mid = midOf(a, b, control)
         } else {
-          d = `M ${a.x} ${a.y} L ${b.x} ${b.y}`
+          const start = boundary(a, b)
+          const end = boundary(b, a)
+          d = `M ${start.x} ${start.y} L ${end.x} ${end.y}`
+          mid = midOf(a, b)
         }
 
         return (
-          <path
-            key={`${e.from}|${e.to}|${e.rel}`}
-            d={d}
-            className={cls}
-            stroke={color}
-            strokeWidth={width}
-            fill="none"
-            markerEnd={`url(#arrow-${e.rel})`}
-            style={e.viaFanout ? { strokeDasharray: '6 4' } : undefined}
-          >
-            <title>
-              {e.from} → {e.to} · {e.rel}
-              {e.callCount > 1 ? ` ×${e.callCount}` : ''}
-              {e.viaFanout ? '（接口扇出）' : ''}
-            </title>
-          </path>
+          <g key={`${e.from}|${e.to}|${e.rel}`}>
+            <path
+              d={d}
+              className={cls}
+              stroke={style.color}
+              strokeWidth={width}
+              strokeDasharray={style.dash}
+              strokeLinecap="round"
+              fill="none"
+              markerEnd={`url(#arrow-${relKey})`}
+            >
+              <title>
+                {e.from} → {e.to} · {e.rel}
+                {e.callCount > 1 ? ` ×${e.callCount}` : ''}
+                {e.viaFanout ? '（接口扇出）' : ''}
+              </title>
+            </path>
+            {e.viaFanout && (
+              <polygon
+                points={diamond(mid)}
+                fill={style.color}
+                opacity="0.9"
+                pointerEvents="none"
+              />
+            )}
+          </g>
         )
       })}
     </svg>

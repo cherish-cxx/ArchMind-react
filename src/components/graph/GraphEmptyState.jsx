@@ -39,7 +39,7 @@ export default function GraphEmptyState({
 
   const groups = useMemo(() => GroupByPackage(classes || []), [classes])
   const core = useMemo(
-    () => (classes || []).filter((c) => c.description).slice(0, 8),
+    () => (classes || []).filter((c) => (c.core ?? Boolean(c.description))).slice(0, 8),
     [classes]
   )
 

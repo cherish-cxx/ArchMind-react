@@ -34,7 +34,9 @@
  * @property {number} [depth] 仅 call-chain 有，用来做分层布局
  * @property {boolean} [viaFanout] 接口 → 实现类的扇出边/节点
  * @property {number} [edgeCount]
- * @property {string} [description] 来自类清单，Agent 的 graph patch 不带
+ * @property {string} [description] 核心类来自分析阶段，其余类由按需描述补齐
+ * @property {boolean} [isAbstract] 抽象类不参与批量描述
+ * @property {boolean} [core] 分析阶段按关联度选出的核心类
  * @property {number} [x]
  * @property {number} [y]
  */
@@ -103,10 +105,20 @@
  */
 
 /**
+ * 结构化讲解的一段。`citedUids` 可以为空（讲图边界或负向断言时）。
+ * @typedef {Object} Section
+ * @property {string} title
+ * @property {string} body Markdown 正文
+ * @property {string[]} citedUids
+ */
+
+/**
  * POST /api/agent/ask 的响应。
  * @typedef {Object} AgentResponse
  * @property {string} [conversationId]
  * @property {string} message
+ * @property {string|null} [headline]
+ * @property {Section[]} sections
  * @property {boolean} sessionExpired
  * @property {Citation[]} citations
  * @property {UiCommand[]} uiCommands

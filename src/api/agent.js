@@ -65,6 +65,15 @@ function normalizeAgentResponse(data) {
   return {
     conversationId: raw.conversationId ?? null,
     message: raw.message ?? '',
+    // R2 的结构化讲解：这两个字段是**逐段渲染和段落级引用 chip 的唯一来源**。
+    // 漏掉它们，前端只能回落到整段 Markdown + 顶部一个来源列表，
+    // 看起来就像「第二轮没有做 evidence 锚定」。
+    headline: raw.headline ?? null,
+    sections: (Array.isArray(raw.sections) ? raw.sections : []).map((s) => ({
+      title: s?.title ?? '',
+      body: s?.body ?? '',
+      citedUids: Array.isArray(s?.citedUids) ? s.citedUids : []
+    })),
     sessionExpired: Boolean(raw.sessionExpired),
     citations: Array.isArray(raw.citations) ? raw.citations : [],
     uiCommands: Array.isArray(raw.uiCommands) ? raw.uiCommands : [],
