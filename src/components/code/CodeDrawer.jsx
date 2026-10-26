@@ -4,8 +4,6 @@ import { IconX } from '../../icons'
 import { getHighlighter, LANGS } from '../../utils/shiki'
 import useFloatingWindow from '../../hooks/useFloatingWindow'
 
-const THEME = 'github-dark'
-
 const EXT_LANG = {
   java: 'java', kt: 'kotlin', kts: 'kotlin',
   js: 'javascript', mjs: 'javascript', cjs: 'javascript', jsx: 'jsx',
@@ -16,22 +14,53 @@ const EXT_LANG = {
   go: 'go', rs: 'rust', cs: 'csharp', properties: 'properties'
 }
 
+const THEME_KEY = 'archmind:code-theme'
+const SHIKI_THEME = { dark: 'github-dark', light: 'github-light' }
+
 function langOf(filePath) {
   const ext = String(filePath || '').split('.').pop()?.toLowerCase()
   const lang = EXT_LANG[ext] || 'text'
   return LANGS.includes(lang) ? lang : 'text'
 }
 
+/** OrderServiceImpl → OSI；取不到驼峰就退回前两个字母。 */
+function initialsOf(name) {
+  const text = String(name || '')
+  if (!text) return '?'
+  const words = text
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .split(/[\s_.$-]+/)
+    .filter(Boolean)
+  const letters = words.map((w) => w[0]).join('').slice(0, 3).toUpperCase()
+  return letters || text.slice(0, 2).toUpperCase()
+}
+
+function fileNameOf(filePath, fallback) {
+  const name = String(filePath || '').split(/[\\/]/).pop()
+  return name || `${fallback}.java`
+}
+
+function ThemeIcon({ dark }) {
+  return dark ? (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
+    </svg>
+  ) : (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" />
+    </svg>
+  )
+}
+
 /**
  * 代码浮窗：按类 uid 拉源码切片，Shiki 高亮 + 行号 + 复制。
- * 高亮失败时退回纯文本，不影响阅读。
  *
- * 非模态：没有遮罩、不锁焦点，右侧 Agent 面板可以照常使用。
- * 标题栏拖动、右/下/右下三个边缘缩放、双击标题栏最大化。
- *
- * **左侧方法大纲**：点一条 = 滚到那段代码 + 把它锁为提问锚点。
- * 大纲里所有方法的 uid 和方法级 evidence / methodUid 是同一个字符串，
- * 所以「看到的」和「问到的」不会错位。
+ * 左侧大纲按 IDE 文件树的方式排：每个方法一个函数图标，字号比正文略小；
+ * 点一条 = 滚到那段代码 + 把它锁为提问锚点。
+ * 深/浅色是抽屉自己的主题，切在标题栏，记在 localStorage。
  */
 export default function CodeDrawer({
   open, projectId, uid, name, onClose, activeMethodUid, onLockMethod
@@ -41,6 +70,13 @@ export default function CodeDrawer({
   const [data, setData] = useState(null)
   const [html, setHtml] = useState('')
   const [copied, setCopied] = useState(false)
+  const [theme, setTheme] = useState(() => {
+    try {
+      return localStorage.getItem(THEME_KEY) === 'light' ? 'light' : 'dark'
+    } catch {
+      return 'dark'
+    }
+  })
   const seqRef = useRef(0)
   const codeRef = useRef(null)
 
@@ -64,20 +100,7 @@ export default function CodeDrawer({
       try {
         const source = await classSource(projectId, uid)
         if (seq !== seqRef.current) return
-        let highlighted = ''
-        try {
-          const hl = await getHighlighter()
-          if (seq !== seqRef.current) return
-          highlighted = hl.codeToHtml(source.content || '', {
-            lang: langOf(source.filePath),
-            theme: THEME
-          })
-        } catch {
-          highlighted = ''
-        }
-        if (seq !== seqRef.current) return
         setData(source)
-        setHtml(highlighted)
       } catch (err) {
         if (seq !== seqRef.current) return
         setError(err?.message || '源码加载失败')
@@ -89,11 +112,32 @@ export default function CodeDrawer({
     return () => { seqRef.current++ }
   }, [open, projectId, uid])
 
-  // 锁定的方法变化时：清掉旧高亮，标出新方法，并滚到它
+  // 主题切换只重新高亮，不重新拉源码。
+  useEffect(() => {
+    if (!data?.content) return
+    let alive = true
+    ;(async () => {
+      try {
+        const hl = await getHighlighter()
+        if (!alive) return
+        setHtml(hl.codeToHtml(data.content, {
+          lang: langOf(data.filePath),
+          theme: SHIKI_THEME[theme]
+        }))
+      } catch {
+        if (alive) setHtml('')
+      }
+    })()
+    return () => { alive = false }
+  }, [data, theme])
+
+  // 锁定的方法变化时：清掉旧标记，只标首行和末行的行号，并滚到方法位置
   useEffect(() => {
     const box = codeRef.current
     if (!box) return
-    box.querySelectorAll('.md-line-mark').forEach((el) => el.classList.remove('md-line-mark'))
+    box.querySelectorAll('.md-method-start, .md-method-end').forEach((el) => {
+      el.classList.remove('md-method-start', 'md-method-end')
+    })
     if (!activeMethodUid || !data) return
 
     const sliceStart = data.startLine || 1
@@ -105,8 +149,12 @@ export default function CodeDrawer({
     const lines = box.querySelectorAll('.line')
     if (lines.length === 0) return   // 高亮失败退回纯文本时没有逐行节点，跳过
     const startIdx = active.startLine - sliceStart
+    if (startIdx < 0 || startIdx >= lines.length) return
     const count = Math.max(1, (active.endLine || active.startLine) - active.startLine + 1)
-    for (let i = 0; i < count; i += 1) lines[startIdx + i]?.classList.add('md-line-mark')
+    const endIdx = Math.min(lines.length - 1, startIdx + count - 1)
+
+    lines[startIdx]?.classList.add('md-method-start')
+    lines[endIdx]?.classList.add('md-method-end')
 
     // 不用 scrollIntoView：浮窗背后还有图谱页，它会连带把整个页面滚走
     const first = lines[startIdx]
@@ -131,6 +179,7 @@ export default function CodeDrawer({
   if (!open) return null
 
   const title = data?.simpleName || name || uid?.split('.').pop() || '源码'
+  const fileName = fileNameOf(data?.filePath, title)
   const range = data ? `${data.filePath}:${data.startLine}-${data.endLine}` : ''
   const methods = data?.methods || []
   const sliceStart = data?.startLine || 1
@@ -138,6 +187,14 @@ export default function CodeDrawer({
   const activeMethod = activeMethodUid ? methods.find((m) => m.uid === activeMethodUid) : null
   const jumpable = (m) => typeof m.startLine === 'number'
     && m.startLine >= sliceStart && m.startLine <= sliceEnd
+
+  const toggleTheme = () => {
+    setTheme((prev) => {
+      const next = prev === 'dark' ? 'light' : 'dark'
+      try { localStorage.setItem(THEME_KEY, next) } catch { /* ignore */ }
+      return next
+    })
+  }
 
   const copy = async () => {
     if (!data?.content) return
@@ -152,18 +209,29 @@ export default function CodeDrawer({
 
   return (
     <aside
-      className={`code-window code-drawer${dragging ? ' is-dragging' : ''}${maximized ? ' is-maximized' : ''}`}
+      className={`code-window code-drawer is-${theme}${dragging ? ' is-dragging' : ''}${maximized ? ' is-maximized' : ''}`}
       role="dialog"
       aria-label="类源码"
       style={{ left: rect.x, top: rect.y, width: rect.w, height: rect.h }}
     >
       <header className="code-drawer-head" {...dragProps}>
-        <div className="code-drawer-title">
-          <strong>{title}</strong>
-          <span className="code-drawer-uid">{data?.uid || uid}</span>
+        <div className="code-drawer-file">
+          <span className="code-file-badge" aria-hidden="true">{initialsOf(title)}</span>
+          <div className="code-drawer-title">
+            <strong>{fileName}</strong>
+            <span className="code-drawer-uid">{data?.uid || uid}</span>
+          </div>
         </div>
         <div className="code-drawer-actions">
-          <button className="btn-ghost code-copy" onClick={copy} disabled={!data?.content}>
+          <button
+            className="icon-btn code-theme"
+            onClick={toggleTheme}
+            title={theme === 'dark' ? '切换浅色主题' : '切换深色主题'}
+            aria-label={theme === 'dark' ? '切换浅色主题' : '切换深色主题'}
+          >
+            <ThemeIcon dark={theme === 'dark'} />
+          </button>
+          <button className="code-copy" onClick={copy} disabled={!data?.content}>
             {copied ? '已复制' : '复制'}
           </button>
           <button className="icon-btn" onClick={onClose} title="关闭">
@@ -190,7 +258,10 @@ export default function CodeDrawer({
         {!loading && !error && data && (
           <div className="code-drawer-split">
             <nav className="code-outline" aria-label="方法大纲">
-              <div className="code-outline-head">方法 {methods.length}</div>
+              <div className="code-outline-head">
+                <span>方法</span>
+                <span className="code-outline-count">{methods.length}</span>
+              </div>
               {methods.map((m) => {
                 const jump = jumpable(m)
                 return (
@@ -204,9 +275,12 @@ export default function CodeDrawer({
                     title={jump ? m.uid : `${m.uid}（超出已加载的源码范围）`}
                     onClick={() => onLockMethod?.(m)}
                   >
-                    <span className="code-outline-name">{m.name || m.signature || m.uid}</span>
-                    <span className="code-outline-meta">
-                      {m.returnType ? `${m.returnType} · ` : ''}{m.startLine}
+                    <span className="code-outline-icon" aria-hidden="true">ƒ</span>
+                    <span className="code-outline-body">
+                      <span className="code-outline-name">{m.name || m.signature || m.uid}</span>
+                      <span className="code-outline-meta">
+                        {m.returnType ? `${m.returnType} · ` : ''}{m.startLine}
+                      </span>
                     </span>
                   </button>
                 )

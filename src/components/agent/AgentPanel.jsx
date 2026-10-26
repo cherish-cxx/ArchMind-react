@@ -77,10 +77,9 @@ function AgentMessage({
 
   return (
     <div className={`msg agent ${message.error ? 'msg-error' : ''}`}>
-      <span className="msg-avatar"><IconBot size={13} /></span>
       <div className="msg-content">
         {hasSections ? (
-          <div className="msg-bubble msg-markdown msg-sections">
+          <div className="msg-text msg-markdown msg-sections">
             {message.headline && <h2 className="msg-headline">{message.headline}</h2>}
             {sections.map((s, i) => (
               <section className="msg-section" key={`${i}:${s.title || ''}`}>
@@ -303,9 +302,8 @@ export default function AgentPanel({
         {messages.length === 0 && (
           <>
             <div className="msg agent">
-              <span className="msg-avatar"><IconBot size={13} /></span>
               <div className="msg-content">
-                <div className="msg-bubble">
+                <div className="msg-text msg-intro">
                   我是 ArchMind Agent。先在图上点一个类作为锚点，再问我它的调用链、调用方或实现。
                   {!projectId && '（先从左侧打开一个项目。）'}
                 </div>
@@ -344,9 +342,8 @@ export default function AgentPanel({
 
         {pending && (
           <div className="msg agent pending-msg">
-            <span className="msg-avatar"><IconBot size={13} /></span>
             <div className="msg-content">
-              <div className="msg-bubble pending-bubble">
+              <div className="msg-text pending-line">
                 <span className="pending-dots"><i /><i /><i /></span>
                 正在理解问题… 已等待 {elapsed}s
                 <button className="link-action" onClick={onCancel}>取消</button>

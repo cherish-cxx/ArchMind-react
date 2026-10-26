@@ -4,10 +4,11 @@ import { NODE_W, NODE_H } from '../../graph/layout'
  * 一个类节点。默认只显示「类型 + 类名」，保持画布干净；
  * 包名、描述、入/出关系数放在悬停（或键盘聚焦）后展开的详情卡里。
  *
- * 方法不是节点 —— V1 的图粒度是类级，方法只会通过 citation 落在 owner 类的详情里。
+ * 根节点是 div[role=button] 而不是 button —— 卡片里还要放一个「打开焦点视图」
+ * 按钮，button 不能嵌套。
  */
 export default function GraphNodeCard({
-  node, degree, pending, selected, focused, hasGap, onPath, onClick, onOpen
+  node, degree, pending, selected, focused, hasGap, onPath, onClick, onOpen, onFocus
 }) {
   const kind = (node.kind || 'CLASS').toLowerCase()
   const inbound = degree?.in ?? 0
@@ -16,10 +17,10 @@ export default function GraphNodeCard({
   // 核心 / 次核心只影响左侧标记，不碰边框 —— 边框已经用来表示类型了
   const tier = node.core === true ? 'tier-core' : (description ? 'tier-secondary' : '')
   const tierLabel = node.core === true ? '核心类' : (description ? '已描述' : '')
+  const name = node.name || node.uid
 
   return (
-    <button
-      type="button"
+    <div
       className={[
         'graph-node',
         `kind-${kind}`,
@@ -35,24 +36,46 @@ export default function GraphNodeCard({
         width: NODE_W,
         height: NODE_H
       }}
+      role="button"
+      tabIndex={0}
       aria-label={`${node.uid}${description ? `，${description}` : ''}`}
       onClick={(e) => {
         e.stopPropagation()
         onClick?.(node.uid)
-        // 键盘触发的 click 没有 detail，双击事件也不会来，直接开窗兜底
-        if (e.detail === 0) onOpen?.(node.uid)
       }}
       onDoubleClick={(e) => {
         e.stopPropagation()
         onOpen?.(node.uid)
       }}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          e.stopPropagation()
+          onClick?.(node.uid)
+        }
+      }}
       onMouseDown={(e) => e.stopPropagation()}
     >
       <span className="gn-head">
         <span className="gn-kind">{(node.kind || 'CLASS').slice(0, 1)}</span>
-        <span className="gn-name">{node.name || node.uid}</span>
+        <span className="gn-name">{name}</span>
         {hasGap && <span className="gn-gap" title="链路在这里中断">断</span>}
       </span>
+
+      <button
+        type="button"
+        className="gn-focus"
+        title="打开焦点视图"
+        aria-label={`打开 ${name} 的焦点视图`}
+        onClick={(e) => {
+          e.stopPropagation()
+          onFocus?.(node.uid)
+        }}
+        onDoubleClick={(e) => e.stopPropagation()}
+        onMouseDown={(e) => e.stopPropagation()}
+      >
+        ↗
+      </button>
 
       <span className="gn-detail" role="tooltip">
         <span className="gn-detail-head">
@@ -71,6 +94,6 @@ export default function GraphNodeCard({
           )}
         </span>
       </span>
-    </button>
+    </div>
   )
 }

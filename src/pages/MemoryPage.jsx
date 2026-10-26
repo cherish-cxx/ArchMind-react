@@ -1,13 +1,27 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import TopBar from '../components/TopBar'
 import ProjectInfo from '../components/ProjectInfo'
 import GraphCanvas from '../components/graph/GraphCanvas'
 import GraphEmptyState from '../components/graph/GraphEmptyState'
 import GraphStatusBar from '../components/graph/GraphStatusBar'
+import GraphTabs from '../components/graph/GraphTabs'
 import AgentPanel from '../components/agent/AgentPanel'
 import { listClasses, classRelations } from '../api/project'
 import { getConversation as apiGetConversation, navigate as apiNavigate } from '../api/agent'
 import { classRelationsToGraph, classToNode } from '../graph/adapters'
+import { buildCumulativeModel, buildFocusModel, pageSnapshot } from '../graph/view'
+import {
+  activatePage,
+  closeAllFocusPages,
+  closeFocusPage,
+  getPagesState,
+  openFocusPage,
+  resetPages,
+  setPageSelected,
+  setPageView,
+  togglePackage,
+  usePagesState
+} from '../state/pagesStore'
 import {
   layoutBfs,
   layoutDepth,
@@ -78,6 +92,18 @@ function hasRelation(state, uid) {
   return false
 }
 
+/** 焦点页只画 1 跳：目标是不是中心或它的直接邻居。 */
+function isDirectNeighbor(centerUid, uid) {
+  if (!centerUid || !uid) return false
+  if (centerUid === uid) return true
+  for (const e of getGraphState().edges.values()) {
+    if ((e.from === centerUid && e.to === uid) || (e.to === centerUid && e.from === uid)) {
+      return true
+    }
+  }
+  return false
+}
+
 /**
  * 类清单缓存放在模块级，而不是组件 ref 里：
  * React StrictMode 在开发环境会卸载重挂组件，ref 会跟着重置，
@@ -120,7 +146,15 @@ export default function MemoryPage({
   const [classesError, setClassesError] = useState('')
   const [classesRefresh, setClassesRefresh] = useState(0)
 
-  const [view, setView] = useState({ scale: 1, x: 0, y: 0 })
+  const pages = usePagesState()
+  const activePage = pages.pages.find((p) => p.id === pages.activeId) || pages.pages[0]
+  const view = activePage.view
+  // 走 getPagesState() 而不是闭包里的 activePage：CLEAR_VIEW 先关焦点页再重置视图，
+  // 同一帧里 activeId 已经变了，闭包会指到已经删掉的页。
+  const setView = useCallback(
+    (updater) => setPageView(getPagesState().activeId, updater),
+    []
+  )
   const [fitSignal, setFitSignal] = useState(0)
   // 窄屏（例如桌面应用的预览分栏）默认收起 Agent 面板，
   // 否则 232px 侧栏 + 340px 面板会把画布挤到不可用宽度。
@@ -137,6 +171,8 @@ export default function MemoryPage({
     IMPLEMENTS: true,
     DEPENDS: true
   })
+  // 已展开的框：key -> 展开时的矩形。只影响累积页的投影，不写回节点坐标。
+  const [expandedBoxes, setExpandedBoxes] = useState(() => new Map())
 
   const canvasWrapRef = useRef(null)
   const selectSeq = useRef(0)
@@ -144,6 +180,50 @@ export default function MemoryPage({
   const prevClassesAnalyzingRef = useRef(analyzing)
   const prevAnalyzingRef = useRef(analyzing)
   const [navigating, setNavigating] = useState(false)
+
+  // 焦点页中心列表只在「打开/关闭/替换」时变；用字符串 key 避免平移缩放也重算模型。
+  const focusCenterKey = pages.pages
+    .filter((p) => p.kind === 'focus' && p.centerUid)
+    .map((p) => p.centerUid)
+    .join('|')
+  const activeFocusCenters = useMemo(
+    () => new Set(focusCenterKey ? focusCenterKey.split('|') : []),
+    [focusCenterKey]
+  )
+
+  const cumulativeModel = useMemo(() => {
+    const protectedUids = new Set(activeFocusCenters)
+    if (graph.focusUid) protectedUids.add(graph.focusUid)
+    if (graph.selectedUid) protectedUids.add(graph.selectedUid)
+    for (const uid of graph.pathUids || []) protectedUids.add(uid)
+    return buildCumulativeModel(graph, {
+      filters: relFilters,
+      protectedUids,
+      exemptSourceUids: activeFocusCenters,
+      expandedBoxes
+    })
+  }, [graph, relFilters, expandedBoxes, activeFocusCenters])
+
+  const activeModel = useMemo(() => {
+    if (activePage.kind === 'focus') {
+      return buildFocusModel(graph, activePage, { filters: relFilters })
+    }
+    return cumulativeModel
+  }, [
+    activePage.kind,
+    activePage.id,
+    activePage.centerUid,
+    activePage.selectedUid,
+    activePage.collapsedPackages,
+    graph,
+    relFilters,
+    cumulativeModel
+  ])
+
+  // 切页后自动适配一次；每页各自保留自己的 view，节点坐标互不影响。
+  useEffect(() => {
+    setFitSignal((n) => n + 1)
+  }, [pages.activeId])
 
   /**
    * 项目切换 / 刷新恢复。
@@ -156,9 +236,10 @@ export default function MemoryPage({
   useEffect(() => {
     let alive = true
     selectSeq.current++
-    setView({ scale: 1, x: 0, y: 0 })
+    resetPages()
     setFitSignal((n) => n + 1)
     setNavigating(false)
+    setExpandedBoxes(new Map())
 
     if (!loggedIn || !projectId) {
       resetGraph()
@@ -232,6 +313,8 @@ export default function MemoryPage({
     clearProjectCache(projectId)
     resetGraph()
     startNewConversation()
+    resetPages()
+    setExpandedBoxes(new Map())
     setFitSignal((n) => n + 1)
   }, [analyzing, projectId])
 
@@ -393,9 +476,19 @@ export default function MemoryPage({
   }, [projectId, centerOnNode, mergeRelations, methodFocus, onClearMethodFocus])
 
   const handleNodeClick = useCallback((uid) => {
+    // 焦点页单击只选中，不重定中心；要换中心就点另一个节点的焦点按钮。
+    if (activePage.kind === 'focus') {
+      setPageSelected(activePage.id, uid)
+      return
+    }
     const clazz = classes.find((c) => c.qualifiedName === uid)
     selectClass(clazz || { qualifiedName: uid, simpleName: simpleName(uid) })
-  }, [classes, selectClass])
+  }, [activePage, classes, selectClass])
+
+  const handleBackgroundClick = useCallback(() => {
+    if (activePage.kind === 'focus') setPageSelected(activePage.id, null)
+    else setGraphSelected(null)
+  }, [activePage])
 
   // 双击才看源码。单击已经把节点设为焦点，这里只负责打开窗口。
   const handleNodeOpen = useCallback((uid) => {
@@ -403,13 +496,110 @@ export default function MemoryPage({
     onOpenCode?.(uid, clazz?.simpleName)
   }, [classes, onOpenCode])
 
+  /** 焦点页打开时的 1 跳：只给没有坐标的新节点找位置，已有节点一律不动。 */
+  const mergeRelationsIncremental = useCallback((converted) => {
+    if (!converted) return
+    const before = getGraphState()
+    applyGraphPatch(converted.patch)
+    const after = getGraphState()
+    const newUids = (converted.patch.nodes || [])
+      .map((n) => n.uid)
+      .filter((uid) => !Number.isFinite(before.nodes.get(uid)?.x))
+    if (newUids.length === 0) return
+    const positions = placeIncremental(after, newUids, after.focusUid || converted.centerUid)
+    applyNodePositions(shiftIntoBounds(after, positions))
+  }, [])
+
+  const openFocusTab = useCallback(async (uid) => {
+    if (!uid) return
+    const current = getPagesState()
+    const existed = current.pages.some(
+      (p) => p.kind === 'focus' && p.centerUid === uid
+    )
+    const page = openFocusPage(uid)
+    if (!page || existed) return
+
+    setFitSignal((n) => n + 1)
+    if (!projectId) return
+
+    try {
+      const relations = await classRelations(projectId, uid)
+      mergeRelationsIncremental(classRelationsToGraph(relations))
+      if (getPagesState().activeId === page.id) setFitSignal((n) => n + 1)
+    } catch {
+      // 关系拉不到就只显示中心，焦点页仍然可用
+    }
+  }, [projectId, mergeRelationsIncremental])
+
+  const handleNodeFocus = useCallback((uid) => {
+    openFocusTab(uid)
+  }, [openFocusTab])
+
+  const handlePackageToggle = useCallback((name) => {
+    const current = getPagesState()
+    const page = current.pages.find((p) => p.id === current.activeId)
+    if (page?.kind === 'focus') togglePackage(page.id, name)
+  }, [])
+
+  const handlePickClass = useCallback((clazz) => {
+    const current = getPagesState()
+    const page = current.pages.find((p) => p.id === current.activeId)
+    if (page?.kind === 'focus') {
+      const uid = clazz?.qualifiedName || clazz?.uid
+      if (uid) openFocusTab(uid)
+      return
+    }
+    selectClass(clazz)
+  }, [selectClass, openFocusTab])
+
   const handleRelayout = useCallback(() => {
+    const current = getPagesState()
+    const page = current.pages.find((p) => p.id === current.activeId)
+    // 焦点页的中心固定、节点按环排；「重新布局」只服务累积页。
+    if (page?.kind === 'focus') return
     const state = getGraphState()
     if (state.nodes.size === 0) return
     const positions = layoutBfs(state, state.focusUid)
     applyNodePositions(shiftIntoBounds(state, positions))
     setFitSignal((n) => n + 1)
   }, [])
+
+  const handleBoxToggle = useCallback((key) => {
+    setExpandedBoxes((prev) => {
+      const next = new Map(prev)
+      if (next.has(key)) {
+        next.delete(key)
+        return next
+      }
+      const box = cumulativeModel.boxes.find((b) => b.key === key)
+      if (!box) return prev
+      next.set(key, box.rect)
+      return next
+    })
+  }, [cumulativeModel])
+
+  const handleBoxCollapse = useCallback((key) => {
+    setExpandedBoxes((prev) => {
+      if (!prev.has(key)) return prev
+      const next = new Map(prev)
+      next.delete(key)
+      return next
+    })
+  }, [])
+
+  // 图变化后成员集合可能变了，旧 key 不再对应任何框，顺手清掉。
+  useEffect(() => {
+    setExpandedBoxes((prev) => {
+      if (prev.size === 0) return prev
+      let changed = false
+      const next = new Map()
+      for (const [key, rect] of prev) {
+        if (cumulativeModel.allBoxKeys.has(key)) next.set(key, rect)
+        else changed = true
+      }
+      return changed ? next : prev
+    })
+  }, [cumulativeModel])
 
   const handleZoomBy = (factor) => {
     const el = canvasWrapRef.current
@@ -444,7 +634,12 @@ export default function MemoryPage({
       const rev = Number(cmd?.rev)
       if (Number.isFinite(rev) && rev < localRev) continue
 
+      const current = getPagesState()
+      const page = current.pages.find((p) => p.id === current.activeId)
+      const onFocusPage = page?.kind === 'focus'
+
       if (cmd.op === 'CLEAR_VIEW') {
+        closeAllFocusPages()
         resetGraph()
         setView({ scale: 1, x: 0, y: 0 })
         setFitSignal((n) => n + 1)
@@ -454,6 +649,15 @@ export default function MemoryPage({
 
       const target = cmd?.target?.uid ? ownerUid(cmd.target.uid) : null
       if (!target) continue
+
+      if (onFocusPage) {
+        // 焦点页只画 1 跳：能选的选中，其余命令不在这里执行，也不自动切页。
+        if (cmd.op === 'FOCUS_NODE' && isDirectNeighbor(page.centerUid, target)) {
+          setPageSelected(page.id, target)
+          applied = true
+        }
+        continue
+      }
 
       if (cmd.op === 'FOCUS_NODE') {
         if (!getGraphState().nodes.has(target)) {
@@ -506,7 +710,17 @@ export default function MemoryPage({
       const patchUids = (patch.nodes || []).map((n) => n.uid)
       if (patchUids.length > 0) {
         let positions = {}
-        if ((patch.nodes || []).some((n) => Number.isFinite(n.depth))) {
+        const current = getPagesState()
+        const page = current.pages.find((p) => p.id === current.activeId)
+        if (page?.kind === 'focus') {
+          // 焦点页不重排累积图：只给新节点找位置，已有坐标一律不动。
+          const newUids = patchUids.filter(
+            (uid) => !Number.isFinite(before.nodes.get(uid)?.x)
+          )
+          if (newUids.length > 0) {
+            positions = placeIncremental(after, newUids, page.centerUid || after.focusUid)
+          }
+        } else if ((patch.nodes || []).some((n) => Number.isFinite(n.depth))) {
           positions = layoutDepth(after, patchUids)
         } else {
           const center = inferStarCenter(patch)
@@ -530,10 +744,12 @@ export default function MemoryPage({
     if (patch) setFitSignal((n) => n + 1)
   }, [executeCommands])
 
-  const getFocus = useCallback(
-    () => (graph.focusUid ? { type: 'CLASS', uid: graph.focusUid } : null),
-    [graph.focusUid]
-  )
+  const getFocus = useCallback(() => {
+    if (activePage.kind === 'focus' && activePage.centerUid) {
+      return { type: 'CLASS', uid: activePage.selectedUid || activePage.centerUid }
+    }
+    return graph.focusUid ? { type: 'CLASS', uid: graph.focusUid } : null
+  }, [activePage, graph.focusUid])
 
   // 方法锁是独立锚点：画布仍停在类上，提问时额外带上方法 uid
   const getMethodUid = useCallback(() => methodFocus?.uid || null, [methodFocus])
@@ -541,8 +757,16 @@ export default function MemoryPage({
   // 图/焦点变化后 400ms 上报整屏快照；flush 在发问前把屏幕先刷上去。
   const { flush: flushViewport } = useViewportReporter({
     projectId,
-    enabled: loggedIn && !!projectId
+    enabled: loggedIn && !!projectId,
+    getSnapshot: () => pageSnapshot(activeModel),
+    revision: activeModel
   })
+
+  // 切页立即把新屏幕刷上去：为旧页面算出的 uiCommands 会被 rev 守卫丢掉。
+  useEffect(() => {
+    if (!loggedIn || !projectId) return
+    flushViewport()
+  }, [pages.activeId, loggedIn, projectId, flushViewport])
 
   // 节点进入画布且没有描述时按需补齐；不阻塞渲染，失败了就保持无描述。
   useClassDescriptions({
@@ -622,11 +846,24 @@ export default function MemoryPage({
   // citation 可能是方法级，图节点是类级：落到 owner 类上再聚焦。
   const handleCitation = useCallback((uid) => {
     const owner = ownerUid(uid)
+    const current = getPagesState()
+    const page = current.pages.find((p) => p.id === current.activeId)
+    if (page?.kind === 'focus') {
+      if (isDirectNeighbor(page.centerUid, owner)) setPageSelected(page.id, owner)
+      else openFocusTab(owner)
+      return
+    }
     const clazz = classes.find((c) => c.qualifiedName === owner)
     selectClass(clazz || { qualifiedName: owner, simpleName: simpleName(owner) })
-  }, [classes, selectClass])
+  }, [classes, selectClass, openFocusTab])
 
   const handleClearFocus = useCallback(() => {
+    const current = getPagesState()
+    const page = current.pages.find((p) => p.id === current.activeId)
+    if (page?.kind === 'focus') {
+      setPageSelected(page.id, null)
+      return
+    }
     setGraphFocus(null)
     setGraphSelected(null)
   }, [])
@@ -636,8 +873,12 @@ export default function MemoryPage({
     setPanelWidth(w)
   }, [])
 
-  const focusNode = graph.focusUid ? graph.nodes.get(graph.focusUid) : null
-  const focusLabel = focusNode?.name || (graph.focusUid ? simpleName(graph.focusUid) : '')
+  const activeFocusUid =
+    activePage.kind === 'focus'
+      ? activePage.selectedUid || activePage.centerUid
+      : graph.focusUid
+  const focusNode = activeFocusUid ? graph.nodes.get(activeFocusUid) : null
+  const focusLabel = focusNode?.name || (activeFocusUid ? simpleName(activeFocusUid) : '')
 
   return (
     <main className="main memory-main">
@@ -647,7 +888,7 @@ export default function MemoryPage({
           currentProject={currentProject}
           onOpenProject={onOpenProject}
           classes={classes}
-          onPickClass={selectClass}
+          onPickClass={handlePickClass}
           relFilters={relFilters}
           onToggleRel={(rel) => setRelFilters((f) => ({ ...f, [rel]: !f[rel] }))}
           scale={view.scale}
@@ -670,16 +911,27 @@ export default function MemoryPage({
           onAnalyze={onAnalyze}
         />
 
+        <GraphTabs
+          pages={pages.pages}
+          activeId={pages.activeId}
+          onActivate={activatePage}
+          onClose={closeFocusPage}
+        />
+
         <div className="canvas-wrap" ref={canvasWrapRef}>
           <GraphCanvas
-            graph={graph}
+            model={activeModel}
             filters={relFilters}
             view={view}
             setView={setView}
             fitSignal={fitSignal}
             onNodeClick={handleNodeClick}
             onNodeOpen={handleNodeOpen}
-            onBackgroundClick={() => setGraphSelected(null)}
+            onNodeFocus={handleNodeFocus}
+            onBoxToggle={handleBoxToggle}
+            onBoxCollapse={handleBoxCollapse}
+            onPackageToggle={handlePackageToggle}
+            onBackgroundClick={handleBackgroundClick}
           />
 
           {graph.nodes.size === 0 && (
@@ -701,11 +953,13 @@ export default function MemoryPage({
           )}
 
           <GraphStatusBar
-            nodes={graph.nodes.size}
-            edges={graph.edges.size}
-            gaps={graph.gaps.size}
-            truncated={graph.truncated}
+            nodes={activeModel.nodes.length}
+            edges={activeModel.edges.length}
+            gaps={activeModel.gaps.length}
+            hiddenCount={activeModel.hiddenCount}
+            truncated={activeModel.truncated}
             focusLabel={focusLabel}
+            canRelayout={activePage.kind !== 'focus'}
             onRelayout={handleRelayout}
           />
         </div>

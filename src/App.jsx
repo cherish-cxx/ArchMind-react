@@ -28,6 +28,17 @@ export default function App() {
   const [loginOpen, setLoginOpen] = useState(false)
   const [newProjectOpen, setNewProjectOpen] = useState(false)
 
+  // 侧栏：收起后不在布局里占宽度，悬停最左侧临时浮出
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem('archmind:sidebar-collapsed') === '1'
+    } catch {
+      return false
+    }
+  })
+  const [sidebarHover, setSidebarHover] = useState(false)
+  const sidebarHideTimer = useRef(null)
+
   // 项目与概况
   const [projects, setProjects] = useState([])
   const [currentProject, setCurrentProject] = useState(null)
@@ -207,6 +218,39 @@ export default function App() {
     setPage(p)
   }, [])
 
+  // 侧栏：收起/展开、悬停浮出、移开延迟隐藏
+  const openSidebar = useCallback(() => {
+    clearTimeout(sidebarHideTimer.current)
+    setSidebarHover(true)
+  }, [])
+
+  const scheduleSidebarHide = useCallback(() => {
+    clearTimeout(sidebarHideTimer.current)
+    sidebarHideTimer.current = setTimeout(() => setSidebarHover(false), 120)
+  }, [])
+
+  const toggleSidebar = useCallback(() => {
+    clearTimeout(sidebarHideTimer.current)
+    setSidebarHover(false)
+    setSidebarCollapsed((v) => !v)
+  }, [])
+
+  const pinSidebar = useCallback(() => {
+    clearTimeout(sidebarHideTimer.current)
+    setSidebarHover(false)
+    setSidebarCollapsed(false)
+  }, [])
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('archmind:sidebar-collapsed', sidebarCollapsed ? '1' : '0')
+    } catch {
+      // ignore
+    }
+  }, [sidebarCollapsed])
+
+  useEffect(() => () => clearTimeout(sidebarHideTimer.current), [])
+
   // 打开代码浮窗：图谱节点 / 代码探索列表共用
   const handleOpenCode = useCallback((uid, simpleName) => {
     const projectId = currentProjectRef.current?.id
@@ -372,6 +416,18 @@ export default function App() {
 
   return (
     <div className="app">
+      {sidebarCollapsed && (
+        <div className="sidebar-hotzone" onMouseEnter={openSidebar}>
+          <button
+            className="sidebar-peek"
+            onClick={pinSidebar}
+            title="展开侧栏"
+            aria-label="展开侧栏"
+          >
+            ›
+          </button>
+        </div>
+      )}
       <Sidebar
         page={page}
         onNavigate={navigate}
@@ -380,6 +436,14 @@ export default function App() {
         onLogout={handleLogout}
         projects={projects}
         onOpenProject={openProject}
+        activeProjectId={
+          page === 'detail' || page === 'memory' ? currentProject?.id : null
+        }
+        collapsed={sidebarCollapsed}
+        floating={sidebarCollapsed && sidebarHover}
+        onPeek={openSidebar}
+        onHoverEnd={scheduleSidebarHide}
+        onToggleCollapse={toggleSidebar}
       />
 
       {page === 'memory' ? (

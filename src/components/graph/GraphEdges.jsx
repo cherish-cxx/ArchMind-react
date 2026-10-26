@@ -44,8 +44,8 @@ function diamond(p, r = 4) {
 /**
  * 所有边画在一张 SVG 里。
  *
- * 边的方向来自后端（from → to），前端只负责画箭头；
- * 双向边用曲线向两侧错开，否则两条线会完全重合，看不出方向。
+ * 视图层已经把隐藏成员折算到框、聚合了重复边，并算好了 d/mid；
+ * 这里优先用路由结果，只有旧调用方没给 d 时才退回本地几何。
  */
 export default function GraphEdges({ nodes, edges, bounds, filters, pathUids }) {
   const positioned = useMemo(() => {
@@ -93,14 +93,12 @@ export default function GraphEdges({ nodes, edges, bounds, filters, pathUids }) 
 
       {edges.map((e) => {
         if (filters && filters[e.rel] === false) return null
-        const a = positioned.get(e.from)
-        const b = positioned.get(e.to)
-        if (!a || !b) return null
 
         const style = REL_STYLE[e.rel] || FALLBACK
         const relKey = REL_STYLE[e.rel] ? e.rel : 'CALLS'
+        const count = e.count || e.callCount || 1
         const width = e.rel === 'CALLS'
-          ? Math.min(3, 1 + (e.callCount || 1) * 0.35)
+          ? Math.min(3, 1 + count * 0.35)
           : style.width
         const cls = [
           'graph-edge',
@@ -109,38 +107,43 @@ export default function GraphEdges({ nodes, edges, bounds, filters, pathUids }) 
           pathUids && pathUids.has(e.from) && pathUids.has(e.to) ? 'on-path' : ''
         ].filter(Boolean).join(' ')
 
-        let d
-        let mid
-        if (e.from === e.to) {
-          // 自环：从节点右上角绕出去，不参与节点的矩形容器。
-          const x = a.x
-          const y = a.y - NODE_H / 2
-          d = `M ${x - 34} ${y + 14} C ${x - 70} ${y - 55}, ${x + 70} ${y - 55}, ${x + 34} ${y + 14}`
-          mid = { x, y: y - 26 }
-        } else if (directed.has(`${e.to}|${e.from}`)) {
-          // 双向边：各自沿自己方向的左侧弯，合起来就是两条分开的弧。
-          const mx = (a.x + b.x) / 2
-          const my = (a.y + b.y) / 2
-          const vx = b.x - a.x
-          const vy = b.y - a.y
-          const len = Math.hypot(vx, vy) || 1
-          const px = -vy / len
-          const py = vx / len
-          const bend = Math.min(72, 26 + len * 0.12)
-          const control = { x: mx + px * bend, y: my + py * bend }
-          const start = boundary(a, control)
-          const end = boundary(b, control)
-          d = `M ${start.x} ${start.y} Q ${control.x} ${control.y} ${end.x} ${end.y}`
-          mid = midOf(a, b, control)
-        } else {
-          const start = boundary(a, b)
-          const end = boundary(b, a)
-          d = `M ${start.x} ${start.y} L ${end.x} ${end.y}`
-          mid = midOf(a, b)
+        let d = e.d
+        let mid = e.mid
+
+        if (!d) {
+          const a = positioned.get(e.from)
+          const b = positioned.get(e.to)
+          if (!a || !b) return null
+
+          if (e.from === e.to) {
+            const x = a.x
+            const y = a.y - NODE_H / 2
+            d = `M ${x - 34} ${y + 14} C ${x - 70} ${y - 55}, ${x + 70} ${y - 55}, ${x + 34} ${y + 14}`
+            mid = { x, y: y - 26 }
+          } else if (directed.has(`${e.to}|${e.from}`)) {
+            const mx = (a.x + b.x) / 2
+            const my = (a.y + b.y) / 2
+            const vx = b.x - a.x
+            const vy = b.y - a.y
+            const len = Math.hypot(vx, vy) || 1
+            const px = -vy / len
+            const py = vx / len
+            const bend = Math.min(72, 26 + len * 0.12)
+            const control = { x: mx + px * bend, y: my + py * bend }
+            const start = boundary(a, control)
+            const end = boundary(b, control)
+            d = `M ${start.x} ${start.y} Q ${control.x} ${control.y} ${end.x} ${end.y}`
+            mid = midOf(a, b, control)
+          } else {
+            const start = boundary(a, b)
+            const end = boundary(b, a)
+            d = `M ${start.x} ${start.y} L ${end.x} ${end.y}`
+            mid = midOf(a, b)
+          }
         }
 
         return (
-          <g key={`${e.from}|${e.to}|${e.rel}`}>
+          <g key={e.key || `${e.from}|${e.to}|${e.rel}`}>
             <path
               d={d}
               className={cls}
@@ -153,8 +156,9 @@ export default function GraphEdges({ nodes, edges, bounds, filters, pathUids }) 
             >
               <title>
                 {e.from} → {e.to} · {e.rel}
-                {e.callCount > 1 ? ` ×${e.callCount}` : ''}
+                {count > 1 ? ` ×${count}` : ''}
                 {e.viaFanout ? '（接口扇出）' : ''}
+                {e.viaBox ? '（已折叠）' : ''}
               </title>
             </path>
             {e.viaFanout && (

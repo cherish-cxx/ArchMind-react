@@ -4,6 +4,16 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>ArchMind · 记忆地图</title>
+    <script>
+      // 在样式和 React 之前恢复主题，避免刷新时先闪一下浅色
+      try {
+        var savedTheme = localStorage.getItem('archmind:theme')
+        if (savedTheme === 'dark' || savedTheme === 'light') {
+          document.documentElement.dataset.theme = savedTheme
+          document.documentElement.style.colorScheme = savedTheme
+        }
+      } catch (e) { /* ignore */ }
+    </script>
   </head>
   <body>
     <div id="root"></div>

@@ -1,25 +1,32 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { boundsOf, NODE_H, NODE_W, PAD } from '../../graph/layout'
+import { NODE_H, NODE_W, PAD } from '../../graph/layout'
+import { boundsOfRects } from '../../graph/view'
 import { ownerUid } from '../../graph/model'
+import GraphBox, { GraphBoxMarker } from './GraphBox'
 import GraphEdges from './GraphEdges'
 import GraphNodeCard from './GraphNodeCard'
 
 const hasPos = (n) => Number.isFinite(n?.x) && Number.isFinite(n?.y)
+const EMPTY = []
 
 /**
- * 画布：平移、缩放、适配，节点与边。
+ * 画布：平移、缩放、适配，节点、框、包块与边。
  *
- * 视图变换沿用旧 MapCanvas 的做法（transform: translate + scale），
- * 但数据源换成了 graphStore，并且没有任何演示数据。
+ * 输入是视图层算好的 pageModel，不再自己读 store ——
+ * 观察/焦点两种页面共用这一份渲染代码，只换 model。
  */
 export default function GraphCanvas({
-  graph,
+  model,
   filters,
   view,
   setView,
   fitSignal = 0,
   onNodeClick,
   onNodeOpen,
+  onNodeFocus,
+  onBoxToggle,
+  onBoxCollapse,
+  onPackageToggle,
   onBackgroundClick
 }) {
   const containerRef = useRef(null)
@@ -29,26 +36,17 @@ export default function GraphCanvas({
   const prevCountRef = useRef(0)
   const prevSizeRef = useRef({ w: 0, h: 0 })
 
-  const nodes = [...graph.nodes.values()]
-  const positioned = nodes.filter(hasPos)
-  const bounds = boundsOf(positioned)
-  const gaps = [...graph.gaps.values()]
-  const gapOwners = new Set(gaps.map((g) => ownerUid(g.at)))
-  const edges = [...graph.edges.values()]
-
-  // 关系数按当前图实时算：后端 edgeCount 只有 call-chain 节点带，class-relations 没有。
-  const degree = useMemo(() => {
-    const map = new Map()
-    for (const e of graph.edges.values()) {
-      const from = map.get(e.from) || { in: 0, out: 0 }
-      from.out += 1
-      map.set(e.from, from)
-      const to = map.get(e.to) || { in: 0, out: 0 }
-      to.in += 1
-      map.set(e.to, to)
-    }
-    return map
-  }, [graph.edges])
+  const nodes = model?.nodes || EMPTY
+  const positioned = useMemo(() => nodes.filter(hasPos), [nodes])
+  const boxes = model?.boxes || EMPTY
+  const markers = model?.expandedMarkers || EMPTY
+  const pills = model?.pills || EMPTY
+  const packages = model?.packages || EMPTY
+  const gaps = model?.gaps || EMPTY
+  const edges = model?.edges || EMPTY
+  const bounds = model?.bounds || boundsOfRects(EMPTY)
+  const nodeUids = useMemo(() => new Set(nodes.map((n) => n.uid)), [nodes])
+  const gapOwners = useMemo(() => new Set(gaps.map((g) => ownerUid(g.at))), [gaps])
 
   // 尺寸监听：适配视图和缩放都依赖它
   useEffect(() => {
@@ -70,17 +68,19 @@ export default function GraphCanvas({
     }
     const w = el.clientWidth
     const h = el.clientHeight
-    const b = boundsOf(positioned)
+    const b = bounds
     // 底部 34px 是状态条，适配时把它让出来，否则节点会被压在状态条下面。
     const usableH = Math.max(120, h - 34)
-    const scale = Math.max(0.25, Math.min(1.2, Math.min((w - 40) / b.width, (usableH - 32) / b.height)))
+    const scale = Math.max(
+      0.25,
+      Math.min(1.2, Math.min((w - 40) / b.width, (usableH - 32) / b.height))
+    )
     const cx = (b.minX + b.maxX) / 2
     const cy = (b.minY + b.maxY) / 2
     setView({ scale, x: w / 2 - cx * scale, y: usableH / 2 - cy * scale })
-  }, [positioned, setView])
+  }, [positioned, bounds, setView])
 
   // 容器尺寸变化（拖 Agent 面板、窗口缩放）时保持视口中心不跳。
-  // 放在 fitSignal 的 effect 之前：同一帧里如果既要 resize 又要 fit，fit 应该赢。
   useEffect(() => {
     const prev = prevSizeRef.current
     prevSizeRef.current = size
@@ -91,7 +91,7 @@ export default function GraphCanvas({
     setView((v) => ({ ...v, x: v.x + dx, y: v.y + dy }))
   }, [size.w, size.h, setView])
 
-  // 外部请求适配（工具栏 / SHOW_PATH / 重新布局）
+  // 外部请求适配（工具栏 / SHOW_PATH / 重新布局 / 切页）
   useEffect(() => {
     if (fitSignal === lastFitRef.current) return
     lastFitRef.current = fitSignal
@@ -148,12 +148,21 @@ export default function GraphCanvas({
 
   const handleMouseDown = (e) => {
     if (e.button !== 0) return
-    if (e.target.closest('.graph-node') || e.target.closest('.graph-gap-node')) return
+    if (
+      e.target.closest('.graph-node') ||
+      e.target.closest('.graph-gap-node') ||
+      e.target.closest('.graph-box') ||
+      e.target.closest('.graph-box-marker') ||
+      e.target.closest('.graph-pill') ||
+      e.target.closest('.graph-package-label')
+    ) {
+      return
+    }
     dragRef.current = { sx: e.clientX, sy: e.clientY, ox: view.x, oy: view.y, moved: false }
   }
 
   // 没有子节点的断点：画在已定位节点的下方，避免丢掉「未解析」这个事实
-  const orphanGaps = gaps.filter((g) => !graph.nodes.has(ownerUid(g.at)))
+  const orphanGaps = gaps.filter((g) => !nodeUids.has(ownerUid(g.at)))
   const ghostBaseX = positioned.length ? bounds.minX + PAD : PAD + NODE_W / 2
   const ghostBaseY = positioned.length ? bounds.maxY - PAD + 40 : PAD + NODE_H / 2
 
@@ -163,28 +172,97 @@ export default function GraphCanvas({
         className="graph-world"
         style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.scale})` }}
       >
+        {packages.length > 0 && (
+          <svg
+            className="graph-edges-svg graph-bands-svg"
+            style={{ left: bounds.minX, top: bounds.minY }}
+            width={bounds.width}
+            height={bounds.height}
+            viewBox={`${bounds.minX} ${bounds.minY} ${bounds.width} ${bounds.height}`}
+          >
+            {packages.map((pkg) => (
+              <path
+                key={`band:${pkg.side}:${pkg.name}`}
+                d={pkg.band}
+                className={`graph-package-band${pkg.collapsed ? ' is-collapsed' : ''}`}
+              />
+            ))}
+          </svg>
+        )}
+
         <GraphEdges
           nodes={positioned}
           edges={edges}
           bounds={bounds}
           filters={filters}
-          pathUids={graph.pathUids}
+          pathUids={model?.pathUids}
         />
+
+        {boxes.map((box) => (
+          <GraphBox key={box.key} box={box} onToggle={onBoxToggle} />
+        ))}
+
+        {markers.map((marker) => (
+          <GraphBoxMarker key={marker.key} marker={marker} onCollapse={onBoxCollapse} />
+        ))}
 
         {positioned.map((n) => (
           <GraphNodeCard
             key={n.uid}
             node={n}
-            degree={degree.get(n.uid)}
-            pending={graph.pendingDescriptions?.has(n.uid)}
-            selected={graph.selectedUid === n.uid}
-            focused={graph.focusUid === n.uid}
+            degree={model?.degree?.get(n.uid)}
+            pending={model?.pending?.has(n.uid)}
+            selected={model?.selectedUid === n.uid}
+            focused={model?.focusUid === n.uid}
             hasGap={gapOwners.has(n.uid)}
-            onPath={graph.pathUids?.has(n.uid)}
+            onPath={model?.pathUids?.has(n.uid)}
             onClick={onNodeClick}
             onOpen={onNodeOpen}
+            onFocus={onNodeFocus}
           />
         ))}
+
+        {pills.map((pill) => (
+          <button
+            key={pill.id}
+            type="button"
+            className="graph-pill"
+            style={{
+              left: pill.rect.x,
+              top: pill.rect.y,
+              width: pill.rect.w,
+              height: pill.rect.h
+            }}
+            title={`${pill.name} · ${pill.count} 个类 · 点击展开`}
+            onClick={(e) => {
+              e.stopPropagation()
+              onPackageToggle?.(pill.name)
+            }}
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <span className="gp-name">{pill.name}</span>
+            <span className="gp-count">{pill.count}</span>
+          </button>
+        ))}
+
+        {packages.map((pkg) =>
+          pkg.labelAt ? (
+            <button
+              key={`label:${pkg.side}:${pkg.name}`}
+              type="button"
+              className={`graph-package-label${pkg.collapsed ? ' is-collapsed' : ''}`}
+              style={{ left: pkg.labelAt.x, top: pkg.labelAt.y }}
+              title={pkg.collapsed ? '展开这个包' : '折叠这个包'}
+              onClick={(e) => {
+                e.stopPropagation()
+                onPackageToggle?.(pkg.name)
+              }}
+              onMouseDown={(e) => e.stopPropagation()}
+            >
+              {pkg.name}
+            </button>
+          ) : null
+        )}
 
         {orphanGaps.map((g, i) => (
           <div

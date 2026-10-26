@@ -8,8 +8,10 @@ export default function GraphStatusBar({
   nodes,
   edges,
   gaps,
+  hiddenCount = 0,
   truncated,
   focusLabel,
+  canRelayout = true,
   onRelayout
 }) {
   return (
@@ -26,6 +28,7 @@ export default function GraphStatusBar({
 
       <span className="gs-counts">
         节点 {nodes} · 关系 {edges} · 断点 {gaps}
+        {hiddenCount > 0 ? ` · 折叠 ${hiddenCount}` : ''}
       </span>
 
       <span className="gs-right">
@@ -34,7 +37,7 @@ export default function GraphStatusBar({
             {truncated ? '本轮图被截断，不是全部' : '存在未解析断点'}
           </span>
         )}
-        {nodes > 0 && (
+        {nodes > 0 && canRelayout && (
           <button className="gs-action" onClick={onRelayout}>重新布局</button>
         )}
       </span>

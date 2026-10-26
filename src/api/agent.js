@@ -202,6 +202,10 @@ export async function reportViewport({
   visibleNodes = [],
   visibleRelations = [],
   focusedNode = null,
+  mode = 'cumulative',
+  centerUid = null,
+  hops = 0,
+  foldedCount = 0,
   signal
 }) {
   const cid = requireConversationId(conversationId)
@@ -214,7 +218,11 @@ export async function reportViewport({
         rev,
         visibleNodes,
         visibleRelations: visibleRelations.map(toRelationRef),
-        focusedNode: toNodeRef(focusedNode)
+        focusedNode: toNodeRef(focusedNode),
+        mode,
+        centerUid,
+        hops,
+        foldedCount
       })
     }
   )

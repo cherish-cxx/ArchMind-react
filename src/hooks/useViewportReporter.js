@@ -21,11 +21,17 @@ const DEBOUNCE_MS = 400
  *
  * 触发条件只有「图/焦点变了」，平移缩放不触发 —— viewport 契约里没有相机状态。
  */
-export function useViewportReporter({ projectId, enabled = true }) {
+export function useViewportReporter({ projectId, enabled = true, getSnapshot, revision }) {
   const graph = useGraphState()
   const conversation = useConversationState()
   const queueRef = useRef(Promise.resolve())
   const timerRef = useRef(null)
+  // getSnapshot 每次渲染都是新函数，用 ref 取最新的那份，避免 effect 反复重排。
+  const snapshotRef = useRef(getSnapshot)
+
+  useEffect(() => {
+    snapshotRef.current = getSnapshot
+  }, [getSnapshot])
 
   const send = useCallback(() => {
     const current = getConversationState()
@@ -39,7 +45,7 @@ export function useViewportReporter({ projectId, enabled = true }) {
       const latest = getConversationState()
       if (latest.sessionExpired || latest.conversationId !== conversationId) return null
 
-      const snapshot = getViewportSnapshot()
+      const snapshot = snapshotRef.current ? snapshotRef.current() : getViewportSnapshot()
       const rev = bumpLocalRev()
       try {
         const ack = await reportViewport({ projectId, conversationId, rev, ...snapshot })
@@ -79,7 +85,7 @@ export function useViewportReporter({ projectId, enabled = true }) {
         timerRef.current = null
       }
     }
-  }, [graph, conversation.conversationId, conversation.sessionExpired, enabled, schedule])
+  }, [graph, revision, conversation.conversationId, conversation.sessionExpired, enabled, schedule])
 
   /** 发问前把当前屏幕刷上去，保证 Python 读到的 viewport 不是更旧的。 */
   const flush = useCallback(async () => {

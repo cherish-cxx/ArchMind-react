@@ -153,6 +153,10 @@
  * @property {ViewportRelation[]} visibleRelations
  * @property {NodeRef|null} focusedNode
  * @property {boolean} truncated
+ * @property {'cumulative'|'focus'} [mode]
+ * @property {string|null} [centerUid]
+ * @property {number} [hops]
+ * @property {number} [foldedCount]
  */
 
 /** 指向图实体的类型。 */

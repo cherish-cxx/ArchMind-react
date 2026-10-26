@@ -2,6 +2,7 @@ import { memo, useEffect, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { getHighlighter, LANGS } from '../../utils/shiki'
+import { useTheme } from '../../state/themeStore'
 
 /**
  * 讲解正文的 Markdown 渲染（R2）。
@@ -15,9 +16,8 @@ import { getHighlighter, LANGS } from '../../utils/shiki'
  *     每次新建 plugins 数组会让 ReactMarkdown 白解析一遍。
  */
 
-const THEME = 'github-light'
-
 function CodeBlock({ lang, code }) {
+  const theme = useTheme()
   const [html, setHtml] = useState('')
 
   useEffect(() => {
@@ -26,11 +26,14 @@ function CodeBlock({ lang, code }) {
       .then((highlighter) => {
         if (!alive) return
         const target = LANGS.includes(lang) ? lang : 'text'
-        setHtml(highlighter.codeToHtml(code, { lang: target, theme: THEME }))
+        setHtml(highlighter.codeToHtml(code, {
+          lang: target,
+          theme: theme === 'dark' ? 'github-dark' : 'github-light'
+        }))
       })
       .catch(() => { /* 高亮不是必需品，失败就停在纯文本 */ })
     return () => { alive = false }
-  }, [lang, code])
+  }, [lang, code, theme])
 
   if (!html) {
     return <pre className="md-plain"><code>{code}</code></pre>
@@ -71,7 +74,7 @@ export function MarkdownBody({ text }) {
 
 function MarkdownMessage({ text }) {
   return (
-    <div className="msg-bubble msg-markdown">
+    <div className="msg-text msg-markdown">
       <MarkdownBody text={text} />
     </div>
   )
