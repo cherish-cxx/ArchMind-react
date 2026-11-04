@@ -84,8 +84,7 @@
 /**
  * @typedef {Object} Suggestion
  * @property {string} label
- * @property {string} intent
- * @property {Object<string, any>} [slots]
+ * @property {string} [message] 点击后作为下一句话发回的文本；缺省用 label
  */
 
 /**
@@ -98,7 +97,7 @@
 
 /**
  * @typedef {Object} Meta
- * @property {string} intent
+ * @property {string|null} intent 多步循环为 null；导航/过期等路由状态才有标签
  * @property {number} confidence
  * @property {number} graphRev 后端代码图版本（不是前端 viewport rev）
  * @property {number} latencyMs

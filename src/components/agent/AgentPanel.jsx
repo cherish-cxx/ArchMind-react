@@ -124,9 +124,11 @@ function AgentMessage({
 
         {message.meta && (
           <div className="msg-meta">
-            {message.meta.intent}
-            {Number.isFinite(message.meta.confidence) && ` · ${message.meta.confidence.toFixed(2)}`}
-            {message.meta.latencyMs !== undefined && ` · ${message.meta.latencyMs}ms`}
+            {[
+              message.meta.intent,
+              Number.isFinite(message.meta.confidence) && `把握 ${message.meta.confidence.toFixed(2)}`,
+              message.meta.latencyMs !== undefined && `${message.meta.latencyMs}ms`,
+            ].filter(Boolean).join(" · ")}
           </div>
         )}
 
@@ -149,7 +151,7 @@ function AgentMessage({
               <button
                 key={s.label}
                 className="suggestion-chip"
-                onClick={() => onSuggestion?.(s.label)}
+                onClick={() => onSuggestion?.(s.message || s.label)}
               >
                 {s.label}
               </button>
