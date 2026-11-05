@@ -182,21 +182,29 @@ export async function askStream({
   let answer = null
   let failure = null
 
-  await readSseEvents(res.body, (event) => {
-    const data = parseEventData(event.data)
-    if (event.name === 'step') {
-      if (!data) return
-      try {
-        onStep?.(data)
-      } catch {
-        // 步骤渲染失败不该影响整轮
+  try {
+    await readSseEvents(res.body, (event) => {
+      const data = parseEventData(event.data)
+      if (event.name === 'step') {
+        if (!data) return
+        try {
+          onStep?.(data)
+        } catch {
+          // 步骤渲染失败不该影响整轮
+        }
+      } else if (event.name === 'answer') {
+        if (data) answer = normalizeAgentResponse(data)
+      } else if (event.name === 'error') {
+        failure = data?.message || '本轮回答失败'
       }
-    } else if (event.name === 'answer') {
-      if (data) answer = normalizeAgentResponse(data)
-    } else if (event.name === 'error') {
-      failure = data?.message || '本轮回答失败'
-    }
-  })
+    })
+  } catch (err) {
+    // 取消发生在**读 body** 阶段，到不了 streamRequest 的 catch —— 在这里补一次翻译，
+    // 否则用户点取消会看到浏览器原文「This operation was aborted」。
+    if (err?.name === 'AbortError') throw new ApiError(-1, '请求已取消', 0)
+    if (err instanceof ApiError) throw err
+    throw new ApiError(0, '连接中断，未收到完整回答', 200)
+  }
 
   if (failure) throw new ApiError(0, failure, 200)
   if (!answer) throw new ApiError(0, '连接中断，未收到完整回答', 200)
