@@ -1,4 +1,5 @@
-import { request } from './request.js'
+import { ApiError, request, streamRequest } from './request.js'
+import { parseEventData, readSseEvents } from './sse.js'
 import { NodeRefType } from './agentTypes.js'
 
 /**
@@ -149,6 +150,57 @@ export async function ask({ projectId, message, conversationId = null, focus = n
     })
   })
   return normalizeAgentResponse(data)
+}
+
+/**
+ * 流式一轮问答。
+ *
+ * 步骤事件到达就回调，最终答案以返回值给出（形状与 {@link ask} 完全一致）。
+ * `onStep` 抛异常只影响这一步的渲染，不中断读取 —— 推流是附加路径。
+ *
+ * @param {Object} params
+ * @param {(step: import('./agentTypes.js').Step) => void} [params.onStep]
+ * @returns {Promise<import('./agentTypes.js').AgentResponse>}
+ */
+export async function askStream({
+  projectId, message, conversationId = null, focus = null,
+  methodUid = null, signal, onStep
+}) {
+  const text = (message ?? '').trim()
+  if (!text) throw new Error('消息不能为空')
+
+  const res = await streamRequest('/api/agent/ask/stream', {
+    signal,
+    body: bodyWithProjectId(projectId, {
+      message: text,
+      conversationId: conversationId || null,
+      focus: toNodeRef(focus),
+      methodUid: methodUid || null
+    })
+  })
+
+  let answer = null
+  let failure = null
+
+  await readSseEvents(res.body, (event) => {
+    const data = parseEventData(event.data)
+    if (event.name === 'step') {
+      if (!data) return
+      try {
+        onStep?.(data)
+      } catch {
+        // 步骤渲染失败不该影响整轮
+      }
+    } else if (event.name === 'answer') {
+      if (data) answer = normalizeAgentResponse(data)
+    } else if (event.name === 'error') {
+      failure = data?.message || '本轮回答失败'
+    }
+  })
+
+  if (failure) throw new ApiError(0, failure, 200)
+  if (!answer) throw new ApiError(0, '连接中断，未收到完整回答', 200)
+  return answer
 }
 
 /**

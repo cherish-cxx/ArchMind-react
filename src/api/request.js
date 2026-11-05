@@ -102,6 +102,49 @@ export async function request(path, opts = {}) {
   return json ? json.data : undefined
 }
 
+/**
+ * 流式请求（SSE）。返回**未消费的 Response**，由调用方逐帧读 body。
+ *
+ * 和 {@link request} 的差别只有两点：
+ *  1. 不解包 `Result` —— 正常响应根本不是 JSON；
+ *  2. 失败时必须先看 `Content-Type`：流还没开始就失败（租户拒绝、会话异常）时，
+ *     后端回的是 `200 + Result{code≠0}` 的 JSON，**不是** SSE 帧。
+ */
+export async function streamRequest(path, opts = {}) {
+  const { method = 'POST', body, headers = {}, auth = true, retry = true, signal } = opts
+  const h = { ...headers, Accept: 'text/event-stream' }
+  const tokens = getTokens()
+  if (auth && !h.Authorization && tokens?.accessToken) {
+    h.Authorization = `Bearer ${tokens.accessToken}`
+  }
+  if (typeof body === 'string' && !h['Content-Type']) {
+    h['Content-Type'] = 'application/json'
+  }
+
+  let res
+  try {
+    res = await fetch(`${BASE}${path}`, { method, headers: h, body, signal })
+  } catch (err) {
+    if (err?.name === 'AbortError') throw new ApiError(-1, '请求已取消', 0)
+    throw new ApiError(0, '网络错误：无法连接服务器', 0)
+  }
+
+  if (res.status === 401 && auth && retry) {
+    const renewed = await refreshTokens()
+    if (renewed) return streamRequest(path, { ...opts, retry: false })
+    throw new ApiError(401, '登录已失效，请重新登录', 401)
+  }
+
+  const type = res.headers.get('content-type') || ''
+  if (!res.ok || !type.includes('text/event-stream')) {
+    const json = await parseJson(res)
+    const code = json?.code ?? res.status
+    const message = json?.message ?? `请求失败(${res.status})`
+    throw new ApiError(code, message, res.status)
+  }
+  return res
+}
+
 // 文件上传必须用 XHR：fetch 无法上报上传进度。
 // 其余行为与 request 对齐：注入 token、解包 Result、401 刷新后重试一次。
 export function uploadRequest(path, formData, opts = {}) {
