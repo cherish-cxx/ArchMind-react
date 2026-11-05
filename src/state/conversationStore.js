@@ -118,8 +118,93 @@ export function appendAgentMessage(response) {
   return message.id
 }
 
-/** 传输层失败（超时、断网、500）：不伪装成 agent 回答。 */
-export function appendErrorMessage(text) {
+/**
+ * 开一条**待填**的 agent 消息。
+ *
+ * 流式回答不是「等完整结果再插一条」，而是「先插占位、边收边填」——
+ * 否则步骤只能等到最后才一起出现，就失去了「看到它在查什么」的意义。
+ */
+export function beginAgentMessage() {
+  const message = {
+    id: nextId(),
+    role: 'agent',
+    text: '',
+    headline: null,
+    sections: [],
+    citations: [],
+    suggestions: [],
+    steps: [],
+    meta: null,
+    error: null,
+    pending: true,
+    createdAt: Date.now()
+  }
+  commit({ ...state, messages: [...state.messages, message] })
+  return message.id
+}
+
+function stepKey(step) {
+  return `${step.n}:${step.type}`
+}
+
+/** 往占位消息里追加一步。**按 `n+type` 幂等**：重发不会重复。 */
+export function appendMessageStep(id, step) {
+  if (!step) return
+  const key = stepKey(step)
+  commit({
+    ...state,
+    messages: state.messages.map((m) => {
+      if (m.id !== id) return m
+      const has = (m.steps || []).some((s) => stepKey(s) === key)
+      const steps = has
+        ? m.steps.map((s) => (stepKey(s) === key ? step : s))
+        : [...(m.steps || []), step]
+      return { ...m, steps }
+    })
+  })
+}
+
+/** 收口：用服务端返回的完整响应覆盖占位。 */
+export function completeAgentMessage(id, response) {
+  const conversationId = response?.conversationId || state.conversationId
+  const sessionExpired = Boolean(response?.sessionExpired)
+  commit({
+    ...state,
+    conversationId,
+    messages: state.messages.map((m) => {
+      if (m.id !== id) return m
+      return {
+        ...m,
+        pending: false,
+        text: response?.message ?? '',
+        headline: response?.headline ?? null,
+        sections: response?.sections ?? [],
+        citations: response?.citations ?? [],
+        suggestions: response?.suggestions ?? [],
+        // 服务端是权威；它万一没带 steps，保留已经到的那些
+        steps: response?.steps?.length ? response.steps : m.steps || [],
+        meta: response?.meta ?? null,
+        error: null,
+        sessionExpired
+      }
+    }),
+    sessionExpired: state.sessionExpired || sessionExpired
+  })
+}
+
+/** 收口失败：占位变成错误消息，**不**再插第二条。 */
+export function failAgentMessage(id, text) {
+  commit({
+    ...state,
+    messages: state.messages.map((m) => (
+      m.id === id
+        ? { ...m, pending: false, error: true, text: String(text || '请求失败') }
+        : m
+    ))
+  })
+}
+
+/** 传输层失败（超时、断网、500）：不伪装成 agent 回答。 */export function appendErrorMessage(text) {
   const message = {
     id: nextId(),
     role: 'agent',

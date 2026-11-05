@@ -21,7 +21,7 @@
 /** @typedef {'CLASS'|'INTERFACE'|'ENUM'} NodeKind */
 /** @typedef {'CALLS'|'EXTENDS'|'IMPLEMENTS'|'DEPENDS'} RelationType */
 /** @typedef {'FOCUS_NODE'|'EXPAND_NODE'|'SHOW_PATH'|'CLEAR_VIEW'} UiOp */
-/** @typedef {'INTENT'|'TOOL'|'LLM'} StepType */
+/** @typedef {'PLAN'|'TOOL'|'INTENT'|'LLM'} StepType */
 
 /**
  * 前端可直接渲染的类节点。x/y 由前端布局写入，后端不返回。
@@ -189,7 +189,9 @@ export const UiOp = Object.freeze({
 
 /** 一轮问答里的步骤类型。 */
 export const StepType = Object.freeze({
-  INTENT: 'INTENT',
+  PLAN: 'PLAN',
   TOOL: 'TOOL',
+  /** 历史数据里可能还有这两个值，只为旧记录渲染保留 */
+  INTENT: 'INTENT',
   LLM: 'LLM'
 })

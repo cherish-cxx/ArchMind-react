@@ -17,12 +17,12 @@ function shortUid(uid) {
   return sig ? `${simple}#${sig}` : simple
 }
 
-function StepList({ steps, meta }) {
+function StepList({ steps, meta, live }) {
   if (!steps || steps.length === 0) return null
   return (
-    <details className="msg-steps">
+    <details className="msg-steps" open={live ? true : undefined}>
       <summary>
-        执行详情 · {steps.length} 步
+        {live ? '调查中' : '执行详情'} · {steps.length} 步
         {meta?.latencyMs ? ` · ${meta.latencyMs}ms` : ''}
       </summary>
       <div className="steps-body">
@@ -120,7 +120,11 @@ function AgentMessage({
           </>
         )}
 
-        <StepList steps={message.steps} meta={message.meta} />
+        {message.pending && (message.steps || []).length === 0 && (
+          <div className="msg-investigating">正在调查…</div>
+        )}
+
+        <StepList steps={message.steps} meta={message.meta} live={message.pending} />
 
         {message.meta && (
           <div className="msg-meta">

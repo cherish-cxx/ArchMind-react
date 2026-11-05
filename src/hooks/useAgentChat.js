@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef } from 'react'
-import { ask } from '../api/agent'
+import { askStream } from '../api/agent'
 import {
-  appendAgentMessage,
-  appendErrorMessage,
-  appendSystemMessage,
+  appendMessageStep,
   appendUserMessage,
+  beginAgentMessage,
+  completeAgentMessage,
+  failAgentMessage,
   prepareProject,
   setConversationError,
   setPending,
@@ -51,10 +52,19 @@ export function useAgentChat({ projectId, getFocus, getMethodUid, onGraph, befor
     const controller = new AbortController()
     abortRef.current = controller
     timedOutRef.current = false
-    const timer = setTimeout(() => {
-      timedOutRef.current = true
-      controller.abort()
-    }, REQUEST_TIMEOUT_MS)
+    // **空闲超时**，不是总时长：每收到一个步骤就重新计时。
+    // 一轮多步可能跑很久，但「很久没有任何事件」才是真的卡住了。
+    let timer = null
+    const armTimeout = () => {
+      clearTimeout(timer)
+      timer = setTimeout(() => {
+        timedOutRef.current = true
+        controller.abort()
+      }, REQUEST_TIMEOUT_MS)
+    }
+    armTimeout()
+
+    const agentId = beginAgentMessage()
 
     try {
       // 先把当前屏幕刷给后端，避免 Python 读到的 viewport 落后于 focus。
@@ -64,27 +74,29 @@ export function useAgentChat({ projectId, getFocus, getMethodUid, onGraph, befor
       } catch {
         // 上报失败不阻塞问答
       }
-      const response = await ask({
+      const response = await askStream({
         projectId,
         message: text,
         conversationId: conversation.conversationId,
         focus,
         methodUid,
-        signal: controller.signal
+        signal: controller.signal,
+        onStep: (step) => {
+          armTimeout()
+          appendMessageStep(agentId, step)
+        }
       })
-      appendAgentMessage(response)
+      completeAgentMessage(agentId, response)
       await onGraph?.(response)
       return { ok: true, response }
     } catch (err) {
+      const failure = err?.code === -1
+        ? (timedOutRef.current ? '请求超时（95 秒），请重试。' : '本轮已取消。')
+        : (err?.message || '请求失败')
+      failAgentMessage(agentId, failure)
       if (err?.code === -1) {
-        if (timedOutRef.current) {
-          appendErrorMessage('请求超时（95 秒），请重试。')
-          setConversationError('请求超时')
-        } else {
-          appendSystemMessage('本轮已取消。')
-        }
+        if (timedOutRef.current) setConversationError('请求超时')
       } else {
-        appendErrorMessage(err?.message || '请求失败')
         setConversationError(err?.message || '请求失败')
       }
       return { ok: false, error: err }
