@@ -8,10 +8,12 @@ import ProjectDetail from './components/ProjectDetail'
 import CodeDrawer from './components/code/CodeDrawer'
 import MemoryPage from './pages/MemoryPage'
 import { login as apiLogin, logout as apiLogout } from './api/auth'
+import { listConversations } from './api/agent'
 import {
   analyze, listProjects, createProject, createProjectWithSource, upload, projectOverview, deleteProject
 } from './api/project'
 import { useSession, setLogin as storeSetLogin, clearSession } from './auth/sessionStore'
+import { readNav, writeNav } from './state/navStore'
 import useTaskPolling from './hooks/useTaskPolling'
 
 const MAX_UPLOAD_MB = 500
@@ -24,7 +26,13 @@ export default function App() {
   const session = useSession()
   const loggedIn = !!session.tokens.accessToken
 
-  const [page, setPage] = useState('workbench')
+  // 刷新后按导航快照回到原页面；projectId 等列表回来再解析
+  const restoreProjectIdRef = useRef(null)
+  const [page, setPage] = useState(() => {
+    const nav = readNav()
+    restoreProjectIdRef.current = nav?.projectId ?? null
+    return nav?.page ?? 'workbench'
+  })
   const [loginOpen, setLoginOpen] = useState(false)
   const [newProjectOpen, setNewProjectOpen] = useState(false)
 
@@ -41,6 +49,12 @@ export default function App() {
 
   // 项目与概况
   const [projects, setProjects] = useState([])
+  const [projectsReady, setProjectsReady] = useState(false)
+  // 会话索引：一个项目可以有多个会话，每个会话是一份独立上下文
+  const [conversations, setConversations] = useState([])
+  const [activeConversationId, setActiveConversationId] = useState(null)
+  // 从「最近会话」点进来时要打开的那个会话；MemoryPage 消费后自行加载
+  const [openConversationId, setOpenConversationId] = useState(null)
   const [currentProject, setCurrentProject] = useState(null)
   const [overview, setOverview] = useState(null)
   const [overviewLoading, setOverviewLoading] = useState(false)
@@ -90,8 +104,24 @@ export default function App() {
       )
     } catch (err) {
       showNotice(err?.message || '项目列表加载失败')
+    } finally {
+      setProjectsReady(true)
     }
   }, [showNotice])
+
+  const reloadConversations = useCallback(async () => {
+    if (!loggedIn) return
+    try {
+      setConversations(await listConversations())
+    } catch {
+      // 会话索引失败不阻塞主流程：项目/图谱仍然可用
+    }
+  }, [loggedIn])
+
+  useEffect(() => {
+    if (!loggedIn) return
+    reloadConversations()
+  }, [loggedIn, reloadConversations])
 
   useEffect(() => {
     if (!loggedIn) {
@@ -99,6 +129,9 @@ export default function App() {
       setCurrentProject(null)
       setOverview(null)
       setAnalyzeError('')
+      setConversations([])
+      setActiveConversationId(null)
+      setOpenConversationId(null)
       analyzeSeq.current++
       stopTaskPolling()
       setPage('workbench')
@@ -215,6 +248,7 @@ export default function App() {
   // ========== 页面流转 ==========
   const navigate = useCallback((p) => {
     if (p === 'detail') return
+    if (p === 'memory') setOpenConversationId(null)
     setPage(p)
   }, [])
 
@@ -265,6 +299,8 @@ export default function App() {
     stopTaskPolling()
     setCodeTarget(null)
     setMethodFocus(null)
+    setOpenConversationId(null)
+    setActiveConversationId(null)
     setCurrentProject(project)
     resetOverview()
     setPage('detail')
@@ -278,21 +314,112 @@ export default function App() {
     stopTaskPolling()
     setCodeTarget(null)
     setMethodFocus(null)
+    setOpenConversationId(null)
+    setActiveConversationId(null)
     setCurrentProject(project)
     resetOverview()
     loadDbOverview(project.id)
     resumeTaskPolling(project.id, taskHandlers)
   }, [loadDbOverview, resetOverview, resumeTaskPolling, stopTaskPolling, taskHandlers])
 
+  /**
+   * 从「最近会话」打开一个会话：切到它所属的项目与记忆地图，
+   * 并把 conversationId 交给 MemoryPage 去加载历史与屏幕快照。
+   */
+  const openConversation = useCallback((conv) => {
+    if (!conv) return
+    const project = projects.find((p) => String(p.id) === String(conv.projectId))
+    if (!project) {
+      showNotice('会话所属项目不存在或已被删除')
+      return
+    }
+    analyzeSeq.current++
+    stopTaskPolling()
+    setCodeTarget(null)
+    setMethodFocus(null)
+    setCurrentProject(project)
+    resetOverview()
+    setPage('memory')
+    setOpenConversationId(conv.id)
+    setActiveConversationId(conv.id)
+    loadDbOverview(project.id)
+    resumeTaskPolling(project.id, taskHandlers)
+  }, [projects, showNotice, loadDbOverview, resetOverview, resumeTaskPolling, stopTaskPolling, taskHandlers])
+
+  const handleConversationChange = useCallback((cid) => {
+    setActiveConversationId(cid || null)
+    reloadConversations()
+  }, [reloadConversations])
+
+  /**
+   * 打开某个项目的记忆地图：优先回到该项目最近的会话，
+   * 没有会话时以新上下文进入（项目里第一次探索的场景）。
+   */
+  const openProjectMemory = useCallback((project) => {
+    if (!project) return
+    const latest = conversations.find(
+      (c) => String(c.projectId) === String(project.id)
+    )
+    if (latest) {
+      openConversation(latest)
+      return
+    }
+    analyzeSeq.current++
+    stopTaskPolling()
+    setCodeTarget(null)
+    setMethodFocus(null)
+    setCurrentProject(project)
+    resetOverview()
+    setPage('memory')
+    setOpenConversationId(null)
+    setActiveConversationId(null)
+    loadDbOverview(project.id)
+    resumeTaskPolling(project.id, taskHandlers)
+  }, [conversations, openConversation, loadDbOverview, resetOverview, resumeTaskPolling, stopTaskPolling, taskHandlers])
+
   // 列表里的「重新分析」：进入详情并强制重跑
   const analyzeProject = useCallback((project) => {
     analyzeSeq.current++
     stopTaskPolling()
     setCurrentProject(project)
+    setOpenConversationId(null)
+    setActiveConversationId(null)
     resetOverview()
     setPage('detail')
     runAnalyze(project.id, true)
   }, [resetOverview, runAnalyze, stopTaskPolling])
+
+  // ========== 刷新恢复 ==========
+  // 页面与项目来自本地导航快照；项目已被删掉时退回项目列表。
+  const navRestoredRef = useRef(false)
+  useEffect(() => {
+    if (navRestoredRef.current) return
+    if (!loggedIn) {
+      navRestoredRef.current = true
+      restoreProjectIdRef.current = null
+      return
+    }
+    if (!projectsReady) return
+    navRestoredRef.current = true
+
+    const id = restoreProjectIdRef.current
+    restoreProjectIdRef.current = null
+    if (page !== 'detail' && page !== 'memory') return
+
+    const project = id ? projects.find((p) => String(p.id) === String(id)) : null
+    if (!project) {
+      if (page === 'detail') setPage('projects')
+      return
+    }
+    if (page === 'memory') switchProject(project)
+    else openProject(project)
+  }, [loggedIn, projectsReady, projects, page, openProject, switchProject])
+
+  // 恢复完成后才写快照，避免首帧把待恢复的 projectId 覆盖成 null
+  useEffect(() => {
+    if (!navRestoredRef.current) return
+    writeNav({ page, projectId: currentProject?.id ?? null })
+  }, [page, currentProject])
 
   // ========== 上传 ==========
   const askUpload = useCallback((project) => {
@@ -382,14 +509,17 @@ export default function App() {
         stopTaskPolling()
         setCodeTarget(null)
         setCurrentProject(null)
+        setOpenConversationId(null)
+        setActiveConversationId(null)
         resetOverview()
       }
       if (page === 'detail') setPage('projects')
       reloadProjects()
+      reloadConversations()
     } catch (err) {
       showNotice(err?.message || '删除失败')
     }
-  }, [currentProject, page, reloadProjects, resetOverview, showNotice, stopTaskPolling])
+  }, [currentProject, page, reloadConversations, reloadProjects, resetOverview, showNotice, stopTaskPolling])
 
   // ========== 登录 / 登出 ==========
   const handleLogin = async (username, password) => {
@@ -435,10 +565,9 @@ export default function App() {
         onOpenNewProject={() => setNewProjectOpen(true)}
         onLogout={handleLogout}
         projects={projects}
-        onOpenProject={openProject}
-        activeProjectId={
-          page === 'detail' || page === 'memory' ? currentProject?.id : null
-        }
+        conversations={conversations}
+        onOpenConversation={openConversation}
+        activeConversationId={page === 'memory' ? activeConversationId : null}
         collapsed={sidebarCollapsed}
         floating={sidebarCollapsed && sidebarHover}
         onPeek={openSidebar}
@@ -457,6 +586,8 @@ export default function App() {
           taskProgress={taskProgress}
           taskStage={taskStage}
           uploadInfo={uploadInfo}
+          initialConversationId={openConversationId}
+          onConversationChange={handleConversationChange}
           onOpenProject={switchProject}
           onAnalyze={() => runAnalyze(currentProject?.id, true)}
           onUpload={() => currentProject && askUpload(currentProject)}
@@ -473,16 +604,21 @@ export default function App() {
               loggedIn={loggedIn}
               user={currentUser}
               projects={projects}
+              conversations={conversations}
               onNewProject={() => setNewProjectOpen(true)}
               onOpenLogin={() => setLoginOpen(true)}
               onOpenProject={openProject}
-              onGoMemory={() => setPage('memory')}
+              onOpenConversation={openConversation}
+              onOpenMap={openProjectMemory}
+              onUpload={askUpload}
+              onAnalyze={analyzeProject}
               onGoProjects={() => setPage('projects')}
             />
           ) : page === 'projects' ? (
             <ProjectList
               projects={projects}
               onOpenProject={openProject}
+              onOpenMap={openProjectMemory}
               onUpload={askUpload}
               onAnalyze={analyzeProject}
               onDelete={handleDelete}
@@ -499,6 +635,7 @@ export default function App() {
               onBack={() => setPage('projects')}
               onUpload={() => currentProject && askUpload(currentProject)}
               onAnalyze={() => runAnalyze(currentProject?.id, true)}
+              onOpenMap={() => currentProject && openProjectMemory(currentProject)}
               onOpenCode={handleOpenCode}
               onDelete={() => handleDelete(currentProject)}
             />

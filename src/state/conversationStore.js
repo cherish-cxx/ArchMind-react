@@ -61,6 +61,29 @@ export function startNewConversation() {
   commit(initialState(state.projectId))
 }
 
+/**
+ * 打开一个已存在的会话：用服务端历史替换当前消息。
+ *
+ * 和 {@link hydrateConversation} 的区别是**权威来源**：
+ * 那个读本地快照，这个读服务端回合流水；打开旧会话时以服务端为准。
+ */
+export function loadConversation({ conversationId, messages = [], localRev = 0, sessionExpired = false }) {
+  if (!conversationId) return
+  commit({
+    ...initialState(state.projectId),
+    conversationId,
+    messages: Array.isArray(messages) ? messages : [],
+    localRev: Number(localRev) || 0,
+    sessionExpired: Boolean(sessionExpired)
+  })
+}
+
+/** 首轮回答后服务端才发号；把 cid 补进当前会话，后续轮次才会接上同一上下文。 */
+export function setConversationId(conversationId) {
+  if (!conversationId || conversationId === state.conversationId) return
+  commit({ ...state, conversationId })
+}
+
 /** 刷新恢复时，直接把服务端的 rev 作为起点。 */
 export function setLocalRev(rev) {
   const next = Number(rev) || 0

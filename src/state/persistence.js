@@ -9,8 +9,12 @@
  * 只存**项目相关**的状态；会话过期时保留图作为浏览态是刻意的。
  */
 const VERSION = 1
-const graphKey = (projectId) => `archmind:graph:${projectId}`
-const chatKey = (projectId) => `archmind:chat:${projectId}`
+const DRAFT = 'draft'
+const graphKey = (projectId, conversationId) =>
+  `archmind:graph:${projectId}:${conversationId || DRAFT}`
+const chatKey = (projectId, conversationId) =>
+  `archmind:chat:${projectId}:${conversationId || DRAFT}`
+const lastConversationKey = (projectId) => `archmind:last-conversation:${projectId}`
 
 function canStore() {
   return typeof localStorage !== 'undefined'
@@ -38,32 +42,67 @@ function load(key) {
   }
 }
 
-export function saveGraphSnapshot(projectId, snapshot) {
+export function saveGraphSnapshot(projectId, conversationId, snapshot) {
   if (!projectId) return
-  save(graphKey(projectId), snapshot)
+  save(graphKey(projectId, conversationId), snapshot)
 }
 
-export function loadGraphSnapshot(projectId) {
+export function loadGraphSnapshot(projectId, conversationId) {
   if (!projectId) return null
-  return load(graphKey(projectId))
+  return load(graphKey(projectId, conversationId))
 }
 
-export function saveChatSnapshot(projectId, snapshot) {
+export function saveChatSnapshot(projectId, conversationId, snapshot) {
   if (!projectId) return
-  save(chatKey(projectId), snapshot)
+  save(chatKey(projectId, conversationId), snapshot)
 }
 
-export function loadChatSnapshot(projectId) {
+export function loadChatSnapshot(projectId, conversationId) {
   if (!projectId) return null
-  return load(chatKey(projectId))
+  return load(chatKey(projectId, conversationId))
+}
+
+/** 记住每个项目最后打开的那个会话，刷新时能回到同一个窗口。 */
+export function saveLastConversationId(projectId, conversationId) {
+  if (!projectId || !canStore()) return
+  try {
+    if (conversationId) {
+      localStorage.setItem(lastConversationKey(projectId), String(conversationId))
+    } else {
+      localStorage.removeItem(lastConversationKey(projectId))
+    }
+  } catch {
+    // ignore
+  }
+}
+
+export function loadLastConversationId(projectId) {
+  if (!projectId || !canStore()) return null
+  try {
+    return localStorage.getItem(lastConversationKey(projectId)) || null
+  } catch {
+    return null
+  }
 }
 
 /** 重新分析 / 删除项目后，旧图与旧会话都不再有意义。 */
 export function clearProjectCache(projectId) {
   if (!projectId || !canStore()) return
   try {
-    localStorage.removeItem(graphKey(projectId))
-    localStorage.removeItem(chatKey(projectId))
+    const prefixes = [
+      `archmind:graph:${projectId}:`,
+      `archmind:chat:${projectId}:`
+    ]
+    // 兼容旧版按项目存的单份快照
+    localStorage.removeItem(`archmind:graph:${projectId}`)
+    localStorage.removeItem(`archmind:chat:${projectId}`)
+    localStorage.removeItem(lastConversationKey(projectId))
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const key = localStorage.key(i)
+      if (key && prefixes.some((p) => key.startsWith(p))) {
+        localStorage.removeItem(key)
+      }
+    }
   } catch {
     // ignore
   }

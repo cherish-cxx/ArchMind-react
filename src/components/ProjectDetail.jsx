@@ -1,8 +1,8 @@
-import { statusMeta, stageLabel } from '../statusMeta'
+import { statusMeta, stageLabel, nextStep } from '../statusMeta'
 import { normalizeCategory } from '../utils/techStack'
 import ClassExplorer from './ClassExplorer'
 import {
-  IconArrowLeft, IconUpload, IconRefresh, IconTrash, IconX
+  IconArrowLeft, IconUpload, IconRefresh, IconTrash, IconX, IconMap
 } from '../icons'
 
 function TechTag({ children }) {
@@ -66,7 +66,7 @@ function DomainPreview({ overview }) {
 
 export default function ProjectDetail({
   project, overview, loading, analyzing, taskProgress = 0, taskStage = '', error,
-  onBack, onUpload, onAnalyze, onOpenCode, onDelete
+  onBack, onUpload, onAnalyze, onOpenMap, onOpenCode, onDelete
 }) {
   if (!project) {
     return (
@@ -78,8 +78,16 @@ export default function ProjectDetail({
   }
 
   const st = statusMeta(project.analysisStatus)
+  const step = nextStep(project)
   const hasSource = project.analysisStatus !== 'NO_SOURCE' && project.analysisStatus !== null
   const canAnalyze = hasSource && !analyzing && !loading
+  const primaryAction = step.action === 'map'
+    ? { label: '进入记忆地图', onClick: onOpenMap, icon: <IconMap size={14} /> }
+    : step.action === 'upload'
+      ? { label: '上传源码', onClick: onUpload, icon: <IconUpload size={14} /> }
+      : step.action === 'analyze'
+        ? { label: step.label, onClick: onAnalyze, icon: <IconRefresh size={14} />, disabled: !canAnalyze }
+        : null
 
   return (
     <div className="page page-scroll pdetail">
@@ -95,19 +103,36 @@ export default function ProjectDetail({
           <p className="pd-desc">{project.description || '暂无项目描述'}</p>
         </div>
         <div className="pd-actions">
-          <button className="btn-ghost pd-btn" onClick={onUpload} title="向该项目上传 / 更新 ZIP 源码">
-            <IconUpload size={14} />
-            上传源码
-          </button>
-          <button
-            className="btn-ghost pd-btn"
-            onClick={onAnalyze}
-            disabled={!canAnalyze}
-            title={hasSource ? '重新分析（覆盖旧的概况结果）' : '需先上传源码'}
-          >
-            <IconRefresh size={14} />
-            {analyzing ? `分析中 ${taskProgress}%` : '重新分析'}
-          </button>
+          {primaryAction && (
+            <button
+              className="pd-btn pd-btn-primary"
+              onClick={primaryAction.onClick}
+              disabled={primaryAction.disabled}
+              title={primaryAction.label}
+            >
+              {primaryAction.icon}
+              {primaryAction.label}
+            </button>
+          )}
+          {step.action !== 'upload' && (
+            <button className="btn-ghost pd-btn" onClick={onUpload} title="向该项目上传 / 更新 ZIP 源码">
+              <IconUpload size={14} />
+              上传源码
+            </button>
+          )}
+          {step.action !== 'analyze' && (
+            <button
+              className="btn-ghost pd-btn"
+              onClick={onAnalyze}
+              disabled={!canAnalyze}
+              title={hasSource ? '重新分析（覆盖旧的概况结果）' : '需先上传源码'}
+            >
+              <IconRefresh size={14} />
+              {analyzing
+                ? `分析中 ${taskProgress}%`
+                : project.analysisStatus === 'PENDING' ? '开始分析' : '重新分析'}
+            </button>
+          )}
           <button className="btn-ghost pd-btn danger" onClick={onDelete}>
             <IconTrash size={14} />
             删除

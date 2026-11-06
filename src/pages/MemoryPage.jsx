@@ -7,7 +7,11 @@ import GraphStatusBar from '../components/graph/GraphStatusBar'
 import GraphTabs from '../components/graph/GraphTabs'
 import AgentPanel from '../components/agent/AgentPanel'
 import { listClasses, classRelations } from '../api/project'
-import { getConversation as apiGetConversation, navigate as apiNavigate } from '../api/agent'
+import {
+  getConversation as apiGetConversation,
+  getConversationMessages,
+  navigate as apiNavigate
+} from '../api/agent'
 import { classRelationsToGraph, classToNode } from '../graph/adapters'
 import { buildCumulativeModel, buildFocusModel, pageSnapshot } from '../graph/view'
 import {
@@ -49,6 +53,7 @@ import {
   getConversationPersistSnapshot,
   getConversationState,
   hydrateConversation,
+  loadConversation,
   markSessionExpired,
   prepareProject,
   setLocalRev,
@@ -59,8 +64,10 @@ import {
   clearProjectCache,
   loadChatSnapshot,
   loadGraphSnapshot,
+  loadLastConversationId,
   saveChatSnapshot,
-  saveGraphSnapshot
+  saveGraphSnapshot,
+  saveLastConversationId
 } from '../state/persistence'
 import { useViewportReporter } from '../hooks/useViewportReporter'
 import { useAgentChat } from '../hooks/useAgentChat'
@@ -129,6 +136,8 @@ export default function MemoryPage({
   taskProgress = 0,
   taskStage = '',
   uploadInfo,
+  initialConversationId = null,
+  onConversationChange,
   onOpenProject,
   onAnalyze,
   onUpload,
@@ -247,16 +256,65 @@ export default function MemoryPage({
       return () => { alive = false }
     }
 
+    const before = getConversationState()
+    const sameProject = before.projectId === String(projectId)
+    // 打开旧会话 > 当前内存里的会话 > 该项目上次打开的会话
+    const targetCid = initialConversationId
+      || (sameProject ? before.conversationId : null)
+      || loadLastConversationId(projectId)
+      || null
+
     prepareProject(projectId)
 
-    const rawGraph = loadGraphSnapshot(projectId)
+    const rawGraph = loadGraphSnapshot(projectId, targetCid || 'draft')
     if (rawGraph) restoreGraph(rawGraph)
     else resetGraph()
     setFitSignal((n) => n + 1)
 
-    const rawChat = loadChatSnapshot(projectId)
-    if (rawChat) hydrateConversation(rawChat)
-    else startNewConversation()
+    if (targetCid) {
+      const alreadyLoaded = sameProject
+        && before.conversationId === targetCid
+        && before.messages.length > 0
+
+      if (!alreadyLoaded) {
+        const rawChat = loadChatSnapshot(projectId, targetCid)
+        if (rawChat && String(rawChat.conversationId) === String(targetCid)) {
+          hydrateConversation(rawChat)
+        } else {
+          loadConversation({ conversationId: targetCid })
+        }
+        // 本地快照与目标 cid 不一致时，以目标 cid 为准
+        if (getConversationState().conversationId !== targetCid) {
+          loadConversation({ conversationId: targetCid })
+        }
+      }
+      saveLastConversationId(projectId, targetCid)
+
+      // 本地没有消息（换设备 / 清过缓存）时，从服务端回合流水恢复
+      if (getConversationState().messages.length === 0) {
+        getConversationMessages(targetCid, projectId)
+          .then((res) => {
+            if (!alive) return
+            if (!res.exists) {
+              markSessionExpired()
+              return
+            }
+            setSessionExpired(false)
+            loadConversation({
+              conversationId: targetCid,
+              messages: res.messages,
+              localRev: getConversationState().localRev
+            })
+            // 历史恢复后补一次本地快照，刷新时不再等接口
+            saveChatSnapshot(projectId, targetCid, getConversationPersistSnapshot())
+          })
+          .catch(() => {})
+      }
+    } else {
+      const rawChat = loadChatSnapshot(projectId, 'draft')
+      if (rawChat) hydrateConversation(rawChat)
+      else startNewConversation()
+    }
 
     const cid = getConversationState().conversationId
     if (!cid) return () => { alive = false }
@@ -302,7 +360,7 @@ export default function MemoryPage({
       .catch(() => {})
 
     return () => { alive = false }
-  }, [projectId, loggedIn])
+  }, [projectId, loggedIn, initialConversationId])
 
   // 刚开始一次新的分析：旧图与旧会话都不再可信，直接清掉本地缓存。
   // 初始 mount 时 analyzing 可能已经是 true，所以用 ref 判断「从 false 变 true」。
@@ -788,36 +846,55 @@ export default function MemoryPage({
     beforeSend: flushViewport
   })
 
-  // 本地快照：图与对话各存一份。刷新后先恢复，再由服务端会话校准。
+  /** 新会话：清掉「上次所在会话」，否则刷新后又把旧窗口带回来。 */
+  const handleNewConversation = useCallback(() => {
+    startNew()
+    if (projectId) saveLastConversationId(projectId, null)
+  }, [startNew, projectId])
+
+  // 本地快照：图与对话各存一份，**按会话隔离**。
+  // 同一个项目的两个会话不共享消息，也不共享画布快照。
+  const activeCid = conversation.conversationId || 'draft'
   useEffect(() => {
     if (!projectId) return
     const timer = setTimeout(() => {
-      saveGraphSnapshot(projectId, getGraphPersistSnapshot())
+      saveGraphSnapshot(projectId, activeCid, getGraphPersistSnapshot())
     }, 250)
     return () => clearTimeout(timer)
-  }, [graph, projectId])
+  }, [graph, projectId, activeCid])
 
   useEffect(() => {
     if (!projectId) return
     const timer = setTimeout(() => {
-      saveChatSnapshot(projectId, getConversationPersistSnapshot())
+      saveChatSnapshot(projectId, activeCid, getConversationPersistSnapshot())
     }, 250)
     return () => clearTimeout(timer)
-  }, [conversation, projectId])
+  }, [conversation, projectId, activeCid])
+
+  // 会话变化（首次拿到 cid / 新一轮回答）时通知外层刷新「最近会话」，并记住上次所在会话。
+  const completedTurns = conversation.messages
+    .filter((m) => m.role === 'agent' && !m.pending).length
+  useEffect(() => {
+    if (!projectId) return
+    if (conversation.conversationId) {
+      saveLastConversationId(projectId, conversation.conversationId)
+    }
+    onConversationChange?.(conversation.conversationId || null)
+  }, [projectId, conversation.conversationId, completedTurns, onConversationChange])
 
   // 刷新/离开页面时同步落盘，避免 250ms 防抖还没跑完。
   useEffect(() => {
     if (!projectId) return
     const saveNow = () => {
-      saveGraphSnapshot(projectId, getGraphPersistSnapshot())
-      saveChatSnapshot(projectId, getConversationPersistSnapshot())
+      saveGraphSnapshot(projectId, activeCid, getGraphPersistSnapshot())
+      saveChatSnapshot(projectId, activeCid, getConversationPersistSnapshot())
     }
     window.addEventListener('pagehide', saveNow)
     return () => {
       window.removeEventListener('pagehide', saveNow)
       saveNow()
     }
-  }, [projectId])
+  }, [projectId, activeCid])
 
   /** 退回去：前端直接声明意图，后端出栈，零 LLM。 */
   const handleBack = useCallback(async () => {
@@ -978,7 +1055,7 @@ export default function MemoryPage({
         onSend={send}
         onCancel={cancel}
         onRetry={retry}
-        onNewConversation={startNew}
+        onNewConversation={handleNewConversation}
         onBack={handleBack}
         canBack={canBack}
         navigating={navigating}

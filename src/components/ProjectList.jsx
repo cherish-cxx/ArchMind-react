@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { statusMeta } from '../statusMeta'
+import { statusMeta, nextStep } from '../statusMeta'
 import { IconMore, IconTrash, IconRefresh, IconUpload, IconFolder } from '../icons'
 
 function fmtDate(v) {
@@ -9,7 +9,7 @@ function fmtDate(v) {
 }
 
 // 我的项目：真实列表 + 状态徽标 + 行尾三点菜单（详情/上传/重新分析/删除）
-export default function ProjectList({ projects = [], onOpenProject, onUpload, onAnalyze, onDelete }) {
+export default function ProjectList({ projects = [], onOpenProject, onOpenMap, onUpload, onAnalyze, onDelete }) {
   const [menuId, setMenuId] = useState(null)
   const menuRef = useRef(null)
 
@@ -23,6 +23,14 @@ export default function ProjectList({ projects = [], onOpenProject, onUpload, on
 
   const items = (p) => {
     setMenuId((cur) => (cur === p.id ? null : p.id))
+  }
+
+  const runStep = (p) => {
+    const step = nextStep(p)
+    if (step.action === 'upload') return onUpload?.(p)
+    if (step.action === 'analyze') return onAnalyze?.(p)
+    if (step.action === 'map') return onOpenMap?.(p)
+    return onOpenProject?.(p)
   }
 
   return (
@@ -41,6 +49,7 @@ export default function ProjectList({ projects = [], onOpenProject, onUpload, on
         <ul className="plist-list">
           {projects.map((p) => {
             const st = statusMeta(p.analysisStatus)
+            const step = nextStep(p)
             return (
               <li key={p.id} className="plist-row">
                 <button className="plist-main" onClick={() => onOpenProject(p)}>
@@ -52,6 +61,16 @@ export default function ProjectList({ projects = [], onOpenProject, onUpload, on
                 </button>
                 <span className={`status-pill ${st.cls}`}>{st.label}</span>
                 <span className="plist-date">{fmtDate(p.createTime)}</span>
+                <button
+                  type="button"
+                  className={`plist-action${step.action === 'map' ? ' is-primary' : ''}`}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    runStep(p)
+                  }}
+                >
+                  {step.label}
+                </button>
                 <div className="plist-menu-wrap" ref={menuId === p.id ? menuRef : undefined}>
                   <button
                     className="icon-btn plist-more"
@@ -70,8 +89,8 @@ export default function ProjectList({ projects = [], onOpenProject, onUpload, on
                       </button>
                       <button
                         className="row-menu-item"
-                        disabled={p.analysisStatus !== 'COMPLETED' && p.analysisStatus !== 'FAILED'}
-                        title={p.analysisStatus === 'NO_SOURCE' || p.analysisStatus === 'PENDING' ? '需先上传源码' : ''}
+                        disabled={p.analysisStatus === 'NO_SOURCE' || p.analysisStatus === 'PENDING'}
+                        title={p.analysisStatus === 'NO_SOURCE' ? '需先上传源码' : p.analysisStatus === 'PENDING' ? '分析进行中' : ''}
                         onClick={() => { setMenuId(null); onAnalyze(p) }}
                       >
                         <IconRefresh size={14} /> 重新分析

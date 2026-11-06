@@ -295,7 +295,7 @@ export async function reportViewport({
 
 /**
  * 读回会话：刷新页面时恢复屏幕用。
- * 不返回 history（后端有意只给屏幕快照和当前焦点）。
+ * 不返回 history（历史走 getConversationMessages）。
  *
  * @param {string} conversationId
  * @param {string|number} projectId
@@ -311,3 +311,62 @@ export async function getConversation(conversationId, projectId, signal) {
   )
   return normalizeSnapshot(data)
 }
+
+/**
+ * 会话索引：一个项目下可以有多个会话，每个会话是一份独立上下文。
+ * 不传 projectId 时跨项目返回。
+ *
+ * @param {string|number|null} [projectId]
+ * @returns {Promise<Array<{id:string, projectId:string, title:string, turnCount:number, status:string, createdAt:string|null, updatedAt:string|null}>>}
+ */
+export async function listConversations(projectId = null, signal) {
+  const pid = toId(projectId)
+  const data = await request(
+    `/api/agent/conversations${pid ? `?projectId=${encodeURIComponent(pid)}` : ''}`,
+    { signal }
+  )
+  const list = Array.isArray(data) ? data : (data?.conversations || [])
+  return list.map((c) => ({
+    id: c.id,
+    projectId: toId(c.projectId),
+    title: c.title || '新会话',
+    turnCount: Number(c.turnCount) || 0,
+    status: c.status || 'ACTIVE',
+    createdAt: c.createdAt || null,
+    updatedAt: c.updatedAt || null
+  }))
+}
+
+/**
+ * 读取一个会话的历史消息。
+ *
+ * @param {string} conversationId
+ * @param {string|number} projectId
+ * @returns {Promise<{exists:boolean, reason:string|null, messages:Array}>}
+ */
+export async function getConversationMessages(conversationId, projectId, signal) {
+  const cid = requireConversationId(conversationId)
+  const pid = requireProjectId(projectId)
+  const data = await request(
+    `/api/agent/conversations/${encodeURIComponent(cid)}/messages` +
+      `?projectId=${encodeURIComponent(pid)}`,
+    { signal }
+  )
+  return {
+    exists: Boolean(data?.exists),
+    reason: data?.reason ?? null,
+    messages: (Array.isArray(data?.messages) ? data.messages : []).map((m) => ({
+      role: m?.role === 'user' ? 'user' : 'agent',
+      text: m?.text ?? '',
+      headline: m?.headline ?? null,
+      sections: Array.isArray(m?.sections) ? m.sections : [],
+      citations: Array.isArray(m?.citations) ? m.citations : [],
+      suggestions: Array.isArray(m?.suggestions) ? m.suggestions : [],
+      steps: Array.isArray(m?.steps) ? m.steps : [],
+      meta: m?.meta ?? null,
+      error: null,
+      createdAt: m?.createdAt || null
+    }))
+  }
+}
+

@@ -11,6 +11,9 @@ const BATCH_SIZE = 20
 const DEBOUNCE_MS = 400
 /** 一次最多发多少批：剩下的等下一轮 state 变化自然接上，避免瞬间打满 */
 const MAX_BATCHES_PER_TICK = 4
+/** busy 不是「已处理」：服务端在分析中/被别的批次占用时返回它，要有限次重试 */
+const MAX_RETRIES = 3
+const DEFAULT_RETRY_MS = 1500
 
 /**
  * 描述只在「节点进入画布且没有描述」时补，不因点击触发。
@@ -20,19 +23,35 @@ const MAX_BATCHES_PER_TICK = 4
  *  - 画布中心节点例外：用户正看着它，接口也要有一句描述（force）。
  *
  * 幂等依靠两层：前端 requested 集合（本次会话不再重复请求）+ 服务端已有描述即跳过。
+ * 服务端返回 busy（分析中 / 批次占用 / 冷却）时会移出 requested 并重试，
+ * 因此「批量补齐正好在描述这个类」不会让画布永久留白。
  */
 export function useClassDescriptions({ projectId, enabled = true }) {
   const graph = useGraphState()
   const requested = useRef(new Set())
+  const retries = useRef(new Map())
   const queue = useRef(Promise.resolve())
   const timer = useRef(null)
+  const retryTimer = useRef(null)
   const projectRef = useRef(projectId)
+  const runRef = useRef(null)
 
   useEffect(() => {
     if (projectRef.current === projectId) return
     projectRef.current = projectId
     requested.current = new Set()
+    retries.current = new Map()
+    if (retryTimer.current) {
+      clearTimeout(retryTimer.current)
+      retryTimer.current = null
+    }
   }, [projectId])
+
+  useEffect(() => {
+    return () => {
+      if (retryTimer.current) clearTimeout(retryTimer.current)
+    }
+  }, [])
 
   const collect = useCallback(() => {
     const state = getGraphState()
@@ -51,6 +70,28 @@ export function useClassDescriptions({ projectId, enabled = true }) {
     }
     return { pending, centerUid: needCenter ? centerUid : null }
   }, [])
+
+  const scheduleRetry = useCallback((delay) => {
+    if (retryTimer.current) clearTimeout(retryTimer.current)
+    retryTimer.current = setTimeout(() => {
+      retryTimer.current = null
+      runRef.current?.()
+    }, Math.max(300, delay || DEFAULT_RETRY_MS))
+  }, [])
+
+  /** busy / 网络错误：移出 requested 换取下一次机会，超过次数就留在集合里不再请求 */
+  const releaseForRetry = useCallback((uids, delay) => {
+    let shouldRetry = false
+    uids.forEach((uid) => {
+      const n = (retries.current.get(uid) || 0) + 1
+      retries.current.set(uid, n)
+      if (n <= MAX_RETRIES) {
+        requested.current.delete(uid)
+        shouldRetry = true
+      }
+    })
+    if (shouldRetry) scheduleRetry(delay)
+  }, [scheduleRetry])
 
   const run = useCallback(() => {
     if (!projectId || !enabled) return
@@ -76,16 +117,24 @@ export function useClassDescriptions({ projectId, enabled = true }) {
         try {
           const res = await describeClasses(projectId, batch.uids, batch.force)
           if (res?.items?.length) applyNodeDescriptions(res.items)
-          // skipped 也保持 requested：不存在 / 类型不合适 / 失败都不重试
+
+          if (res?.busy) {
+            releaseForRetry(batch.uids, res.retryAfterMs)
+          } else {
+            batch.uids.forEach((uid) => retries.current.delete(uid))
+          }
         } catch {
-          // 网络或服务错误：本会话不再重试这些节点，避免请求风暴
+          // 网络或服务错误：同样给有限次重试，避免一次抖动让节点永久留白
+          releaseForRetry(batch.uids, 2000)
         } finally {
           setGraphDescriptionsPending(batch.uids, false)
         }
       }
     })
     queue.current = task.catch(() => {})
-  }, [projectId, enabled, collect])
+  }, [projectId, enabled, collect, releaseForRetry])
+
+  runRef.current = run
 
   useEffect(() => {
     if (!enabled || !projectId || graph.nodes.size === 0) return

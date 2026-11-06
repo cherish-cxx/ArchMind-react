@@ -1,6 +1,8 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useSession } from '../auth/sessionStore'
 import { useTheme, toggleTheme } from '../state/themeStore'
+import { groupConversations } from '../utils/conversationGroups'
+import ConversationGroups from './conversations/ConversationGroups'
 import {
   IconDashboard, IconMap, IconFolder, IconChevronDown, IconPlus,
   IconSun, IconMoon
@@ -14,7 +16,7 @@ const NAV = [
 
 export default function Sidebar({
   page = 'workbench', onNavigate, onOpenLogin, onOpenNewProject, onLogout,
-  projects = [], onOpenProject, activeProjectId = null,
+  projects = [], conversations = [], onOpenConversation, activeConversationId = null,
   collapsed = false, floating = false,
   onPeek, onHoverEnd, onToggleCollapse
 }) {
@@ -22,6 +24,10 @@ export default function Sidebar({
   const theme = useTheme()
   const loggedIn = !!user
   const [menuOpen, setMenuOpen] = useState(false)
+  const conversationGroups = useMemo(
+    () => groupConversations(conversations, projects),
+    [conversations, projects]
+  )
 
   const handleCreateClick = () => {
     if (!loggedIn) return onOpenLogin()
@@ -70,31 +76,27 @@ export default function Sidebar({
       </nav>
 
       <div className="side-section recent">
-        <div className="side-label">最近项目</div>
-        {projects.length > 0 ? (
-          <ul className="recent-list">
-            {projects.slice(0, 8).map((p) => {
-              const active = activeProjectId != null && String(activeProjectId) === String(p.id)
-              return (
-                <li key={p.id}>
-                  <button
-                    className={`recent-item${active ? ' active' : ''}`}
-                    aria-current={active ? 'page' : undefined}
-                    onClick={() => onOpenProject(p)}
-                    title={p.name}
-                  >
-                    {p.name}
-                  </button>
-                </li>
-              )
-            })}
-          </ul>
+        <div className="side-label">最近会话</div>
+        {conversationGroups.length > 0 ? (
+          <ConversationGroups
+            groups={conversationGroups}
+            activeConversationId={activeConversationId}
+            onOpenConversation={onOpenConversation}
+            variant="sidebar"
+            persistKey="sidebar"
+            maxGroups={8}
+            maxPerGroup={10}
+          />
         ) : (
-          <p className="recent-empty">暂无项目，点击「新建项目」开始</p>
+          <p className="recent-empty">
+            {projects.length > 0
+              ? '还没有对话，打开一个项目开始探索'
+              : '暂无项目，点击「新建项目」开始'}
+          </p>
         )}
         {projects.length > 0 && (
           <button className="link-more" onClick={() => onNavigate('projects')}>
-            查看全部
+            全部项目
           </button>
         )}
       </div>
