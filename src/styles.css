@@ -1209,6 +1209,64 @@ ul { list-style: none; }
 .dm-module-name { font-size: 13px; font-weight: 600; }
 .dm-module-resp { font-size: 12px; color: var(--text-2); line-height: 1.5; }
 
+/* ========== MCP 接入面板 ========== */
+.mcp-block { margin-top: 18px; }
+.mcp-block-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
+.mcp-block-head .dm-label { margin-bottom: 0; }
+.mcp-form { display: flex; gap: 8px; flex-wrap: wrap; }
+.mcp-input, .mcp-select {
+  height: 32px; padding: 0 10px; font: inherit; font-size: 12.5px;
+  color: var(--text-1); background: var(--bg-page);
+  border: 1px solid var(--border); border-radius: var(--radius);
+  outline: none; transition: border var(--transition);
+}
+.mcp-input { flex: 1; min-width: 200px; }
+.mcp-select { min-width: 96px; }
+.mcp-input:focus, .mcp-select:focus { border-color: var(--primary-border); }
+.mcp-input::placeholder { color: var(--text-4); }
+.mcp-note { font-size: 12px; color: var(--text-3); line-height: 1.6; margin-top: 8px; }
+.mcp-error { font-size: 12.5px; color: var(--danger); margin-top: 8px; }
+.mcp-reveal {
+  margin-top: 14px; padding: 12px 14px; border-radius: var(--radius);
+  background: var(--primary-bg); border: 1px solid var(--primary-border);
+}
+.mcp-reveal-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 13px; }
+.mcp-reveal-warn { font-size: 12px; color: var(--danger); flex: 1; min-width: 180px; }
+.mcp-reveal-actions { display: flex; gap: 8px; }
+.mcp-reveal-value {
+  display: block; margin-top: 10px; padding: 8px 10px;
+  background: var(--bg-page); border: 1px dashed var(--primary-border);
+  border-radius: var(--radius-sm); font-size: 12.5px; word-break: break-all;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  color: var(--text-1);
+}
+.mcp-token-list { display: flex; flex-direction: column; gap: 8px; }
+.mcp-token-row {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 10px 12px; border: 1px solid var(--border);
+  border-radius: var(--radius); background: var(--bg-page);
+}
+.mcp-token-row.is-revoked { opacity: .62; }
+.mcp-token-main { display: flex; align-items: center; gap: 8px; min-width: 160px; }
+.mcp-token-name { font-size: 13px; font-weight: 600; }
+.mcp-token-prefix {
+  padding: 1px 6px; border-radius: var(--radius-sm); background: var(--bg-subtle);
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 11.5px; color: var(--text-3);
+}
+.mcp-token-meta { display: flex; gap: 14px; flex-wrap: wrap; flex: 1; font-size: 11.5px; color: var(--text-3); }
+.mcp-revoked { font-size: 12px; color: var(--text-3); }
+.mcp-revoke, .mcp-copy { height: 28px; padding: 0 10px; font-size: 12px; }
+.mcp-code {
+  margin: 0; padding: 12px 14px; overflow-x: auto;
+  background: var(--bg-subtle); border: 1px solid var(--border);
+  border-radius: var(--radius); font-size: 12px; line-height: 1.6;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  color: var(--text-2);
+}
+.mcp-export-row { display: flex; gap: 8px; flex-wrap: wrap; }
+
+
 /* ========== 新建项目弹窗扩展 ========== */
 .modal-new { width: 430px; }
 .file-choose {

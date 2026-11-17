@@ -1,6 +1,7 @@
 import { statusMeta, stageLabel, nextStep } from '../statusMeta'
 import { normalizeCategory } from '../utils/techStack'
 import ClassExplorer from './ClassExplorer'
+import McpAccess from './McpAccess'
 import {
   IconArrowLeft, IconUpload, IconRefresh, IconTrash, IconX, IconMap
 } from '../icons'
@@ -203,6 +204,8 @@ export default function ProjectDetail({
           </div>
 
           <DomainPreview overview={overview} />
+
+          <McpAccess project={project} />
 
           <ClassExplorer projectId={project.id} onOpenCode={onOpenCode} />
         </>
