@@ -74,6 +74,7 @@ export default function McpAccess({ project }) {
   const [snippetCopied, setSnippetCopied] = useState(false)
 
   const [revokingId, setRevokingId] = useState('')
+  const [revokeError, setRevokeError] = useState('')
   const [exporting, setExporting] = useState('')
   const [exportError, setExportError] = useState('')
 
@@ -132,12 +133,13 @@ export default function McpAccess({ project }) {
   const onRevoke = async (t) => {
     if (!window.confirm(`确定吊销令牌「${t.name}」吗？使用该令牌的客户端会立即失去访问权限。`)) return
     setRevokingId(t.id)
-    setListError('')
+    setRevokeError('')
     try {
       await revokeMcpToken(t.id)
+      setRevokeError('')
       await loadTokens()
     } catch (err) {
-      setListError(err?.message || '吊销令牌失败')
+      setRevokeError(err?.message || '吊销令牌失败')
     } finally {
       setRevokingId('')
     }
@@ -267,6 +269,7 @@ export default function McpAccess({ project }) {
             })}
           </div>
         )}
+        {revokeError && <p className="mcp-error">{revokeError}</p>}
       </div>
 
       <div className="mcp-block">

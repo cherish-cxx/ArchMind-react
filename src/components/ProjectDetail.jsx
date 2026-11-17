@@ -205,11 +205,11 @@ export default function ProjectDetail({
 
           <DomainPreview overview={overview} />
 
-          <McpAccess project={project} />
-
           <ClassExplorer projectId={project.id} onOpenCode={onOpenCode} />
         </>
       )}
+
+      <McpAccess project={project} />
     </div>
   )
 }
