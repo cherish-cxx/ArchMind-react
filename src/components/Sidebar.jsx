@@ -4,12 +4,13 @@ import { useTheme, toggleTheme } from '../state/themeStore'
 import { groupConversations } from '../utils/conversationGroups'
 import ConversationGroups from './conversations/ConversationGroups'
 import {
-  IconDashboard, IconMap, IconFolder, IconChevronDown, IconPlus,
+  IconDashboard, IconMap, IconTerritory, IconFolder, IconChevronDown, IconPlus,
   IconSun, IconMoon
 } from '../icons'
 
 const NAV = [
   { page: 'workbench', label: '工作台', icon: IconDashboard },
+  { page: 'domain', label: '领域地图', icon: IconTerritory },
   { page: 'memory', label: '记忆地图', icon: IconMap },
   { page: 'projects', label: '我的项目', icon: IconFolder }
 ]

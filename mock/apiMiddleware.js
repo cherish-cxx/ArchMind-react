@@ -70,7 +70,29 @@ const MOCK_CLASSES = [
   ['com.example.demo.controller.OrderController', 'OrderController', 'CLASS', '订单入口'],
   ['com.example.demo.service.OrderService', 'OrderService', 'INTERFACE', '订单服务接口'],
   ['com.example.demo.service.impl.OrderServiceImpl', 'OrderServiceImpl', 'CLASS', '订单服务实现'],
-  ['com.example.demo.repository.OrderRepository', 'OrderRepository', 'INTERFACE', '订单仓储']
+  ['com.example.demo.repository.OrderRepository', 'OrderRepository', 'INTERFACE', '订单仓储'],
+  ['com.example.demo.model.OrderDTO', 'OrderDTO', 'CLASS', '订单传输对象'],
+  ['com.example.demo.repository.OrderMapper', 'OrderMapper', 'CLASS', '订单持久化'],
+  ['com.example.demo.remote.CouponService', 'CouponService', 'CLASS', '优惠券外部服务'],
+  ['com.example.demo.repository.CouponMapper', 'CouponMapper', 'CLASS', '优惠券持久化'],
+  ['com.example.demo.controller.ItemController', 'ItemController', 'CLASS', '商品入口'],
+  ['com.example.demo.service.ItemService', 'ItemService', 'CLASS', '商品服务'],
+  ['com.example.demo.model.ItemDTO', 'ItemDTO', 'CLASS', '商品传输对象'],
+  ['com.example.demo.repository.ItemMapper', 'ItemMapper', 'CLASS', '商品持久化'],
+  ['com.example.demo.controller.CartController', 'CartController', 'CLASS', '购物车入口'],
+  ['com.example.demo.service.CartService', 'CartService', 'CLASS', '购物车服务'],
+  ['com.example.demo.model.CartDTO', 'CartDTO', 'CLASS', '购物车传输对象'],
+  ['com.example.demo.repository.CartMapper', 'CartMapper', 'CLASS', '购物车持久化'],
+  ['com.example.demo.controller.PaymentController', 'PaymentController', 'CLASS', '支付入口'],
+  ['com.example.demo.service.PaymentService', 'PaymentService', 'CLASS', '支付服务'],
+  ['com.example.demo.model.PaymentDTO', 'PaymentDTO', 'CLASS', '支付传输对象'],
+  ['com.example.demo.repository.PaymentMapper', 'PaymentMapper', 'CLASS', '支付持久化'],
+  ['com.example.demo.controller.UserController', 'UserController', 'CLASS', '用户入口'],
+  ['com.example.demo.service.UserService', 'UserService', 'CLASS', '用户服务'],
+  ['com.example.demo.model.UserDTO', 'UserDTO', 'CLASS', '用户传输对象'],
+  ['com.example.demo.repository.UserMapper', 'UserMapper', 'CLASS', '用户持久化'],
+  ['com.example.demo.job.OrderTimeoutJob', 'OrderTimeoutJob', 'CLASS', '超时订单扫描任务'],
+  ['com.example.demo.listener.PaymentMessageListener', 'PaymentMessageListener', 'CLASS', '支付消息监听']
 ].map(([qualifiedName, simpleName, kind, description]) => ({
   qualifiedName,
   simpleName,
@@ -81,6 +103,138 @@ const MOCK_CLASSES = [
   startLine: 1,
   endLine: 12
 }))
+
+// ===== 领域地图 mock（真实后端来自 Neo4j 的 DOMAIN 阶段）=====
+const PKG = 'com.example.demo'
+const AREA_PREFIX = { order: 'Order', item: 'Item', cart: 'Cart', pay: 'Payment', user: 'User' }
+
+const MOCK_AREAS = [
+  {
+    uid: 'order', name: '订单', kind: 'business', classCount: 33,
+    description: '承接下单、查询与取消，是商品与支付之间的编排层。',
+    capabilities: [
+      { uid: 'POST /orders', name: 'POST /orders', memberCount: 6, entryUid: `${PKG}.controller.OrderController#createOrder()`, description: '创建订单：校验商品与库存、锁定优惠、生成待支付订单。' },
+      { uid: 'GET /orders/{id}', name: 'GET /orders/{id}', memberCount: 4, entryUid: `${PKG}.controller.OrderController#getById()`, description: '查询订单详情，聚合商品、地址与支付状态。' },
+      { uid: 'POST /orders/{id}/cancel', name: 'POST /orders/{id}/cancel', memberCount: 4, entryUid: `${PKG}.controller.OrderController#cancel()`, description: '取消未支付订单，回滚库存与优惠占用。' },
+      { uid: 'GET /orders/page', name: 'GET /orders/page', memberCount: 4, entryUid: `${PKG}.controller.OrderController#page()`, description: '按状态与时间分页查询当前用户的订单列表。' },
+      { uid: 'SCHEDULED com.example.demo.job.OrderTimeoutJob#run()', name: 'SCHEDULED com.example.demo.job.OrderTimeoutJob#run()', memberCount: 4, entryUid: `${PKG}.job.OrderTimeoutJob#run()`, description: '每分钟扫描超时订单并逐步取消，同时通知支付域。' },
+      { uid: 'MQ com.example.demo.listener.PaymentMessageListener#onMessage()', name: 'MQ com.example.demo.listener.PaymentMessageListener#onMessage()', memberCount: 4, entryUid: `${PKG}.listener.PaymentMessageListener#onMessage()`, description: '消费支付完成消息，幂等推进订单状态并触发履约。' }
+    ]
+  },
+  {
+    uid: 'item', name: '商品', kind: 'business', classCount: 41,
+    description: '商品的查询、上架与库存维护，库存写入供订单与购物车共同消费。',
+    capabilities: [
+      { uid: 'GET /items', name: 'GET /items', memberCount: 4, entryUid: `${PKG}.controller.ItemController#list()`, description: '按分类与关键词分页查询在售商品，返回商品卡与库存状态。' },
+      { uid: 'POST /items', name: 'POST /items', memberCount: 4, entryUid: `${PKG}.controller.ItemController#create()`, description: '上架新商品，校验分类与价格后写入商品表。' },
+      { uid: 'GET /items/{id}', name: 'GET /items/{id}', memberCount: 4, entryUid: `${PKG}.controller.ItemController#getById()`, description: '读取单个商品详情与可用库存。' },
+      { uid: 'POST /items/{id}/stock', name: 'POST /items/{id}/stock', memberCount: 4, entryUid: `${PKG}.controller.ItemController#updateStock()`, description: '扣减或回补库存，下单与取消共用。' }
+    ]
+  },
+  {
+    uid: 'cart', name: '购物车', kind: 'business', classCount: 18,
+    description: '登录用户的临时选购清单，结算时整体转为订单。',
+    capabilities: [
+      { uid: 'GET /carts', name: 'GET /carts', memberCount: 4, entryUid: `${PKG}.controller.CartController#list()`, description: '读取当前用户购物车，实时刷新商品价格与库存状态。' },
+      { uid: 'POST /carts', name: 'POST /carts', memberCount: 4, entryUid: `${PKG}.controller.CartController#add()`, description: '把商品加入购物车，同一商品累加数量。' },
+      { uid: 'PUT /carts/{id}/quantity', name: 'PUT /carts/{id}/quantity', memberCount: 4, entryUid: `${PKG}.controller.CartController#update()`, description: '修改购物车条目数量，超库存时给出提示。' }
+    ]
+  },
+  {
+    uid: 'pay', name: '支付', kind: 'business', classCount: 14,
+    description: '发起支付、查询状态并处理回调，是订单履约的资金环节。',
+    capabilities: [
+      { uid: 'POST /payments', name: 'POST /payments', memberCount: 4, entryUid: `${PKG}.controller.PaymentController#create()`, description: '为待支付订单发起支付，生成支付单并返回支付凭证。' },
+      { uid: 'GET /payments/{id}/status', name: 'GET /payments/{id}/status', memberCount: 4, entryUid: `${PKG}.controller.PaymentController#status()`, description: '查询支付单状态，供前端轮询。' },
+      { uid: 'MQ com.example.demo.listener.PaymentMessageListener#onMessage()', name: 'MQ com.example.demo.listener.PaymentMessageListener#onMessage()', memberCount: 4, entryUid: `${PKG}.listener.PaymentMessageListener#onMessage()`, description: '接收第三方支付结果，幂等更新支付单并驱动订单状态。' }
+    ]
+  },
+  {
+    uid: 'user', name: '用户', kind: 'business', classCount: 12,
+    description: '登录与个人资料，为下单、购物车与支付提供身份。',
+    capabilities: [
+      { uid: 'POST /users/login', name: 'POST /users/login', memberCount: 4, entryUid: `${PKG}.controller.UserController#login()`, description: '账号密码登录，签发令牌并记录登录信息。' },
+      { uid: 'GET /users/me', name: 'GET /users/me', memberCount: 4, entryUid: `${PKG}.controller.UserController#me()`, description: '读取当前登录用户资料。' }
+    ]
+  },
+  {
+    uid: 'infrastructure', name: 'infrastructure', kind: 'infrastructure', classCount: 24,
+    description: '数据访问、缓存、消息与通用工具，不产出能力。这里的类通过调用边被业务能力使用。',
+    capabilities: []
+  }
+]
+
+const ORDER_CREATE_DETAIL = {
+  capability: {
+    uid: 'POST /orders',
+    name: 'POST /orders',
+    description: '创建订单：校验商品与库存、锁定优惠、生成待支付订单。',
+    entryUid: `${PKG}.controller.OrderController#createOrder()`,
+    memberCount: 6
+  },
+  members: [
+    { uid: `${PKG}.controller.OrderController`, name: 'OrderController', depth: 0, role: 'entry' },
+    { uid: `${PKG}.service.OrderService`, name: 'OrderService', depth: 1, role: 'business' },
+    { uid: `${PKG}.model.OrderDTO`, name: 'OrderDTO', depth: 1, role: 'domain-model' },
+    { uid: `${PKG}.remote.CouponService`, name: 'CouponService', depth: 2, role: 'business' },
+    { uid: `${PKG}.repository.OrderMapper`, name: 'OrderMapper', depth: 2, role: 'infrastructure' },
+    { uid: `${PKG}.repository.CouponMapper`, name: 'CouponMapper', depth: 3, role: 'infrastructure' }
+  ],
+  edges: [
+    { fromUid: `${PKG}.controller.OrderController`, toUid: `${PKG}.service.OrderService` },
+    { fromUid: `${PKG}.service.OrderService`, toUid: `${PKG}.model.OrderDTO` },
+    { fromUid: `${PKG}.service.OrderService`, toUid: `${PKG}.remote.CouponService` },
+    { fromUid: `${PKG}.service.OrderService`, toUid: `${PKG}.repository.OrderMapper` },
+    { fromUid: `${PKG}.remote.CouponService`, toUid: `${PKG}.repository.CouponMapper` }
+  ],
+  areaCalls: [
+    { toAreaUid: 'item', toAreaName: '商品', count: 3, fromClassUids: [`${PKG}.service.OrderService`] },
+    { toAreaUid: 'pay', toAreaName: '支付', count: 2, fromClassUids: [`${PKG}.service.OrderService`] }
+  ]
+}
+
+function mockCapabilityDetail(uid) {
+  if (uid === 'POST /orders') return ORDER_CREATE_DETAIL
+  const area = MOCK_AREAS.find((a) => a.capabilities.some((c) => c.uid === uid))
+  const cap = area?.capabilities.find((c) => c.uid === uid)
+  if (!area || !cap) return null
+
+  const prefix = AREA_PREFIX[area.uid]
+  const isJob = cap.uid.startsWith('SCHEDULED')
+  const isMessage = cap.uid.startsWith('MQ')
+  const entryClass = isJob ? `${prefix}TimeoutJob` : isMessage ? 'PaymentMessageListener' : `${prefix}Controller`
+  const entryPkg = isJob ? 'job' : isMessage ? 'listener' : 'controller'
+  const service = `${PKG}.service.${prefix}Service`
+  const members = [
+    { uid: `${PKG}.${entryPkg}.${entryClass}`, name: entryClass, depth: 0, role: 'entry' },
+    { uid: service, name: `${prefix}Service`, depth: 1, role: 'business' },
+    { uid: `${PKG}.model.${prefix}DTO`, name: `${prefix}DTO`, depth: 1, role: 'domain-model' },
+    { uid: `${PKG}.repository.${prefix}Mapper`, name: `${prefix}Mapper`, depth: 2, role: 'infrastructure' }
+  ]
+  const edges = [
+    { fromUid: members[0].uid, toUid: service },
+    { fromUid: service, toUid: members[2].uid },
+    { fromUid: service, toUid: members[3].uid }
+  ]
+  const exitUid = area.uid === 'item' ? 'order' : area.uid === 'user' ? null : 'item'
+  const exitArea = MOCK_AREAS.find((a) => a.uid === exitUid)
+  const areaCalls = exitArea
+    ? [{ toAreaUid: exitUid, toAreaName: exitArea.name, count: 2, fromClassUids: [service] }]
+    : []
+
+  return {
+    capability: {
+      uid: cap.uid,
+      name: cap.name,
+      description: cap.description,
+      entryUid: cap.entryUid,
+      memberCount: members.length
+    },
+    members,
+    edges,
+    areaCalls
+  }
+}
 
 function mockSource(uid) {
   const clazz = MOCK_CLASSES.find((c) => c.qualifiedName === uid) || MOCK_CLASSES[0]
@@ -294,6 +448,22 @@ async function dispatch(req) {
     const session = authSession(req)
     if (!session) return { status: 401, json: fail(401, '未登录或登录已失效') }
     return { status: 200, json: ok(MOCK_CLASSES) }
+  }
+
+  const domainMapMatch = path.match(/^\/api\/project\/(\d+)\/domain-map$/)
+  if (method === 'GET' && domainMapMatch) {
+    const session = authSession(req)
+    if (!session) return { status: 401, json: fail(401, '未登录或登录已失效') }
+    return { status: 200, json: ok({ areas: MOCK_AREAS }) }
+  }
+
+  const capabilityMatch = path.match(/^\/api\/project\/(\d+)\/capability$/)
+  if (method === 'GET' && capabilityMatch) {
+    const session = authSession(req)
+    if (!session) return { status: 401, json: fail(401, '未登录或登录已失效') }
+    const detail = mockCapabilityDetail(url.searchParams.get('uid'))
+    if (!detail) return { status: 200, json: fail(4000, '能力不存在') }
+    return { status: 200, json: ok(detail) }
   }
 
   const relationsMatch = path.match(/^\/api\/project\/(\d+)\/class\/relations$/)

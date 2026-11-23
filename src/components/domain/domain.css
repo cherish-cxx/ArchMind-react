@@ -1,0 +1,465 @@
+/* 领域地图（R8）：版图 → 能力 → 链路 */
+
+.dmap-page > * {
+  width: 100%;
+  max-width: 1180px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.dmap-crumbs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  margin-bottom: 16px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--rule-soft);
+  flex-wrap: wrap;
+}
+.dmap-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px 3px 6px;
+  margin-right: 4px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--sheet);
+  color: var(--ink-2);
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.dmap-back:hover { border-color: var(--measure-border); color: var(--measure); }
+.dmap-crumb {
+  padding: 3px 4px;
+  border: 0;
+  background: none;
+  color: var(--ink-3);
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.dmap-crumb:hover { color: var(--measure); }
+.dmap-crumb.is-current { color: var(--ink-1); font-weight: 500; cursor: default; }
+.dmap-crumb-sep { color: var(--ink-4); font-size: 12px; user-select: none; }
+
+.dmap-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 20px;
+}
+.dmap-head h1 {
+  margin: 0 0 6px;
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+}
+.dmap-chain-title { display: flex; align-items: baseline; gap: 9px; flex-wrap: wrap; }
+.dmap-sub {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 9px;
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+.dmap-sub .dmap-lead { color: var(--ink-2); }
+.dmap-sep { width: 1px; height: 10px; background: var(--rule); display: inline-block; }
+.dmap-desc {
+  margin: 9px 0 0;
+  max-width: 68ch;
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--ink-2);
+}
+.dmap-project {
+  flex-shrink: 0;
+  padding: 6px 10px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--sheet);
+  color: var(--ink-1);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.dmap-project:hover { border-color: var(--measure-border); }
+
+/* 版图 */
+.dmap-map {
+  position: relative;
+  width: 100%;
+  border: 1px solid var(--rule);
+  background: var(--rule);
+  overflow: hidden;
+}
+.dmap-cell {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  padding: 16px 18px;
+  border: 0;
+  background: var(--sheet);
+  text-align: left;
+  font: inherit;
+  color: var(--ink-1);
+  cursor: pointer;
+  transition: background-color 0.14s ease;
+}
+.dmap-cell:hover { background: var(--canvas); }
+.dmap-cell:focus-visible { outline: 2px solid var(--measure); outline-offset: -3px; }
+.dmap-cell.is-hover { background: var(--canvas); box-shadow: inset 0 0 0 1px var(--measure); }
+.dmap-cell-name {
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+  margin-bottom: 5px;
+}
+.dmap-cell.is-md .dmap-cell-name { font-size: 18px; }
+.dmap-cell.is-sm .dmap-cell-name { font-size: 16px; margin-bottom: 3px; }
+.dmap-cell.is-xs .dmap-cell-name { font-size: 14px; margin: 0; }
+.dmap-cell-meta {
+  font-size: 12px;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dmap-cell-desc {
+  margin-top: 8px;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--ink-2);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.dmap-cell-open {
+  margin-top: auto;
+  padding-top: 8px;
+  font-size: 12px;
+  color: var(--measure);
+  opacity: 0;
+  transition: opacity 0.14s ease;
+}
+.dmap-cell:hover .dmap-cell-open,
+.dmap-cell:focus-visible .dmap-cell-open,
+.dmap-cell.is-hover .dmap-cell-open { opacity: 1; }
+
+.dmap-map.is-stacked {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.dmap-map.is-stacked .dmap-cell {
+  position: static;
+  width: 100%;
+  height: auto;
+  min-height: 86px;
+  padding: 14px 16px;
+}
+.dmap-map.is-stacked .dmap-cell-name { font-size: 17px; }
+.dmap-map.is-stacked .dmap-cell-open { display: none; }
+.dmap-map.is-stacked .dmap-cell-desc { -webkit-line-clamp: 2; }
+
+.dmap-caption {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 10px;
+  min-height: 22px;
+  margin: 8px 0 0;
+  font-size: 12.5px;
+  color: var(--ink-3);
+}
+.dmap-caption b { color: var(--ink-1); font-weight: 500; }
+.dmap-caption-nums { color: var(--ink-3); font-variant-numeric: tabular-nums; }
+
+.dmap-infra {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 38px;
+  margin-top: 10px;
+  padding: 0 14px;
+  border: 1px solid var(--rule);
+  background:
+    repeating-linear-gradient(135deg, transparent 0 6px,
+      color-mix(in srgb, var(--ink-1) 6%, transparent) 6px 7px),
+    var(--paper);
+  font-size: 12.5px;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+}
+.dmap-infra-tag {
+  flex-shrink: 0;
+  padding: 1px 7px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  font-size: 12px;
+}
+.dmap-infra-note {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.dmap-detail-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 12px;
+  font-size: 12.5px;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+.dmap-detail-foot .btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* 能力块 */
+.dmap-cap-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.dmap-cap {
+  display: flex;
+  flex-direction: column;
+  min-height: 128px;
+  padding: 15px 18px 12px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--sheet);
+  text-align: left;
+  font: inherit;
+  color: var(--ink-1);
+  cursor: pointer;
+  transition: border-color 0.14s ease, background-color 0.14s ease;
+}
+.dmap-cap:hover { border-color: var(--measure); background: var(--canvas); }
+.dmap-cap:focus-visible { outline: 2px solid var(--measure); outline-offset: 2px; }
+.dmap-cap-title {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+  min-width: 0;
+  margin-bottom: 7px;
+}
+.dmap-verb {
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: var(--measure);
+}
+.dmap-verb.is-kind {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  color: var(--ink-3);
+}
+.dmap-cap-path {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--ink-1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dmap-cap-desc {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--ink-2);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.dmap-cap-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: auto;
+  padding-top: 14px;
+  font-size: 12px;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+.dmap-cap-entry {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--ink-4);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 60%;
+}
+
+/* 链路 */
+.dmap-chain-wrap {
+  border-top: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+  background: var(--canvas);
+}
+.dmap-chain-scroll { overflow-x: auto; padding: 18px 0 24px; }
+.dmap-chain { position: relative; min-height: 220px; margin: 0 2px; }
+.dmap-chain svg {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: visible;
+}
+.dmap-chain-axis {
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  top: 30px;
+  height: 1px;
+  background: var(--rule-soft);
+}
+.dmap-col-label {
+  position: absolute;
+  top: 0;
+  font-size: 12px;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+.dmap-col-label b {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  color: var(--measure);
+}
+.dmap-col-label::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 26px;
+  width: 1px;
+  height: 8px;
+  background: var(--rule);
+}
+.dmap-edge { stroke: var(--ink-4); stroke-width: 1.2; opacity: 0.7; }
+.dmap-edge.is-exit { stroke: var(--measure-border); stroke-dasharray: 5 5; opacity: 0.9; }
+
+.dmap-node {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+  padding: 8px 10px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--sheet);
+  text-align: left;
+  font: inherit;
+  color: var(--ink-1);
+  cursor: pointer;
+  transition: border-color 0.14s ease, background-color 0.14s ease;
+}
+.dmap-node:hover { border-color: var(--measure); background: var(--canvas); }
+.dmap-node:focus-visible { outline: 2px solid var(--measure); outline-offset: 2px; }
+.dmap-node-name {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  color: var(--ink-1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dmap-node-sub {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  font-size: 12px;
+  color: var(--ink-4);
+  white-space: nowrap;
+  overflow: hidden;
+}
+.dmap-node.is-entry { border-color: var(--measure); background: var(--measure-soft); }
+.dmap-node.is-entry .dmap-node-name { color: var(--measure); }
+.dmap-node.is-exit { border-style: dashed; border-color: var(--measure-border); background: var(--paper); }
+.dmap-node.is-exit:hover { background: var(--sheet); border-color: var(--measure); }
+.dmap-chain-note {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+  margin: 12px 0 0;
+  font-size: 12px;
+  color: var(--ink-3);
+}
+.dmap-scroll-hint { color: var(--ink-4); }
+
+/* 空态 / 进度 */
+.dmap-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  max-width: 560px;
+  margin: 48px auto;
+  padding: 26px 28px;
+  border: 1px dashed var(--rule);
+  border-radius: var(--radius);
+  background: var(--sheet);
+}
+.dmap-empty-title { margin: 0; font-size: 15px; font-weight: 600; color: var(--ink-1); }
+.dmap-empty-text { margin: 0; font-size: 13px; line-height: 1.65; color: var(--ink-2); }
+.dmap-empty-btn { margin-top: 8px; }
+.dmap-loading { padding: 28px 0; font-size: 13px; color: var(--ink-3); }
+.dmap-empty-note {
+  margin: 0;
+  padding: 20px;
+  border: 1px dashed var(--rule);
+  border-radius: var(--radius);
+  font-size: 13px;
+  color: var(--ink-3);
+}
+.dmap-progress {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.dmap-progress-track {
+  flex: 1;
+  max-width: 420px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--rule-soft);
+  overflow: hidden;
+}
+.dmap-progress-bar { height: 100%; background: var(--measure); transition: width 0.3s ease; }
+.dmap-progress-text { font-size: 12px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+
+@media (max-width: 900px) {
+  .dmap-cap-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 760px) {
+  .dmap-page { padding: 16px 12px 48px; }
+  .dmap-page > * { max-width: 100%; }
+  .dmap-head { flex-direction: column; gap: 10px; }
+  .dmap-head h1 { font-size: 19px; }
+  .dmap-caption { display: none; }
+  .dmap-infra { margin-top: 8px; }
+  .dmap-chain-note { gap: 8px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dmap-cell, .dmap-cap, .dmap-node, .dmap-progress-bar { transition: none !important; }
+}

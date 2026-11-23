@@ -9,6 +9,7 @@ const I = ({ children, size = 16, ...rest }) => (
 export const IconUpload = (p) => <I {...p}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" /></I>
 export const IconDashboard = (p) => <I {...p}><rect x="3" y="3" width="7" height="9" rx="1" /><rect x="14" y="3" width="7" height="5" rx="1" /><rect x="14" y="12" width="7" height="9" rx="1" /><rect x="3" y="16" width="7" height="5" rx="1" /></I>
 export const IconMap = (p) => <I {...p}><polygon points="1 6 8 3 16 6 23 3 23 18 16 21 8 18 1 21 1 6" /><line x1="8" y1="3" x2="8" y2="18" /><line x1="16" y1="6" x2="16" y2="21" /></I>
+export const IconTerritory = (p) => <I {...p}><path d="M3 18.5V8l6-3 5 2 7-2v10.5l-7 2-5-2z" /><path d="M9 5v13" /><path d="M14 7v11.5" /></I>
 export const IconFolder = (p) => <I {...p}><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" /></I>
 export const IconSearch = (p) => <I {...p}><circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.5" y2="16.5" /></I>
 export const IconFilter = (p) => <I {...p}><polygon points="22 3 2 3 10 12.5 10 19 14 21 14 12.5 22 3" /></I>

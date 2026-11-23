@@ -5,6 +5,7 @@ import NewProjectModal from './components/NewProjectModal'
 import Workbench from './components/Workbench'
 import ProjectList from './components/ProjectList'
 import ProjectDetail from './components/ProjectDetail'
+import DomainMapPage from './pages/DomainMapPage'
 import CodeDrawer from './components/code/CodeDrawer'
 import MemoryPage from './pages/MemoryPage'
 import { login as apiLogin, logout as apiLogout } from './api/auth'
@@ -323,6 +324,25 @@ export default function App() {
   }, [loadDbOverview, resetOverview, resumeTaskPolling, stopTaskPolling, taskHandlers])
 
   /**
+   * 打开某个项目的领域地图：切到项目并留在领域页；
+   * 若该项目正在分析，轮询继续，地图会在分析结束后自动刷新。
+   */
+  const openProjectDomain = useCallback((project) => {
+    if (!project) return
+    analyzeSeq.current++
+    stopTaskPolling()
+    setCodeTarget(null)
+    setMethodFocus(null)
+    setOpenConversationId(null)
+    setActiveConversationId(null)
+    setCurrentProject(project)
+    resetOverview()
+    setPage('domain')
+    loadDbOverview(project.id)
+    resumeTaskPolling(project.id, taskHandlers)
+  }, [loadDbOverview, resetOverview, resumeTaskPolling, stopTaskPolling, taskHandlers])
+
+  /**
    * 从「最近会话」打开一个会话：切到它所属的项目与记忆地图，
    * 并把 conversationId 交给 MemoryPage 去加载历史与屏幕快照。
    */
@@ -404,14 +424,14 @@ export default function App() {
 
     const id = restoreProjectIdRef.current
     restoreProjectIdRef.current = null
-    if (page !== 'detail' && page !== 'memory') return
+    if (page !== 'detail' && page !== 'memory' && page !== 'domain') return
 
     const project = id ? projects.find((p) => String(p.id) === String(id)) : null
     if (!project) {
-      if (page === 'detail') setPage('projects')
+      if (page === 'detail' || page === 'domain') setPage('projects')
       return
     }
-    if (page === 'memory') switchProject(project)
+    if (page === 'memory' || page === 'domain') switchProject(project)
     else openProject(project)
   }, [loggedIn, projectsReady, projects, page, openProject, switchProject])
 
@@ -513,7 +533,7 @@ export default function App() {
         setActiveConversationId(null)
         resetOverview()
       }
-      if (page === 'detail') setPage('projects')
+      if (page === 'detail' || page === 'domain') setPage('projects')
       reloadProjects()
       reloadConversations()
     } catch (err) {
@@ -614,6 +634,22 @@ export default function App() {
               onAnalyze={analyzeProject}
               onGoProjects={() => setPage('projects')}
             />
+          ) : page === 'domain' ? (
+            <DomainMapPage
+              loggedIn={loggedIn}
+              projects={projects}
+              currentProject={currentProject}
+              analyzing={analyzing}
+              analyzeError={analyzeError}
+              taskProgress={taskProgress}
+              taskStage={taskStage}
+              onOpenProject={switchProject}
+              onAnalyze={() => runAnalyze(currentProject?.id, true)}
+              onUpload={() => currentProject && askUpload(currentProject)}
+              onOpenLogin={() => setLoginOpen(true)}
+              onGoProjects={() => setPage('projects')}
+              onOpenCode={handleOpenCode}
+            />
           ) : page === 'projects' ? (
             <ProjectList
               projects={projects}
@@ -635,7 +671,7 @@ export default function App() {
               onBack={() => setPage('projects')}
               onUpload={() => currentProject && askUpload(currentProject)}
               onAnalyze={() => runAnalyze(currentProject?.id, true)}
-              onOpenMap={() => currentProject && openProjectMemory(currentProject)}
+              onOpenMap={() => currentProject && openProjectDomain(currentProject)}
               onOpenCode={handleOpenCode}
               onDelete={() => handleDelete(currentProject)}
             />

@@ -5,7 +5,7 @@
  * 页面值域与 App 里的 page 状态一致。
  */
 const KEY = 'archmind:nav'
-const PAGES = new Set(['workbench', 'projects', 'detail', 'memory'])
+const PAGES = new Set(['workbench', 'projects', 'detail', 'memory', 'domain'])
 
 export function readNav() {
   try {

@@ -1,5 +1,8 @@
+import { useEffect, useState } from 'react'
 import { statusMeta, stageLabel, nextStep } from '../statusMeta'
-import { normalizeCategory } from '../utils/techStack'
+import { domainMap } from '../api/domain'
+import { splitAreas, totals } from '../utils/domain'
+import DomainMap from './domain/DomainMap'
 import ClassExplorer from './ClassExplorer'
 import McpAccess from './McpAccess'
 import {
@@ -10,55 +13,76 @@ function TechTag({ children }) {
   return <span className="tag">{children}</span>
 }
 
-// 领域地图预览：近期由已存概况的模块/技术栈驱动；完整代码级领域地图引擎开发中
-function DomainPreview({ overview }) {
-  const stack = overview?.techStack ?? []
-  const arch = overview?.architecture
-  const modules = overview?.modules ?? []
+// 项目详情里的领域地图摘要：读 domain-map，画一张紧凑版图；点击进入完整页面
+function DomainSection({ project, onOpenMap, onAnalyze }) {
+  const [areas, setAreas] = useState(null)
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [reloadKey, setReloadKey] = useState(0)
+  const projectId = project?.id
+  const status = project?.analysisStatus
+
+  useEffect(() => {
+    let alive = true
+    if (!projectId || status !== 'COMPLETED') {
+      setAreas(null)
+      setError('')
+      return () => { alive = false }
+    }
+    setLoading(true)
+    setError('')
+    domainMap(projectId)
+      .then((data) => {
+        if (!alive) return
+        setAreas(data?.areas || [])
+      })
+      .catch((err) => {
+        if (!alive) return
+        setAreas([])
+        setError(err?.message || '领域地图读取失败')
+      })
+      .finally(() => {
+        if (alive) setLoading(false)
+      })
+    return () => { alive = false }
+  }, [projectId, status, reloadKey])
+
+  const { business, infrastructure } = splitAreas(areas || [])
+  const count = totals(business, infrastructure)
+
   return (
     <div className="pd-section">
       <div className="pd-section-head">
         <h2 className="pd-section-title">领域地图</h2>
-        <span className="pd-section-note">预览 · 由项目分析概况生成，随分析更新</span>
+        <span className="pd-section-note">由最近一次分析生成 · 业务领域按类数分块</span>
       </div>
-      {modules.length === 0 && stack.length === 0 ? (
-        <p className="pd-empty-note">分析完成后，这里将基于概况绘制该项目的模块/领域结构。</p>
+
+      {status !== 'COMPLETED' ? (
+        <p className="pd-empty-note">分析完成后，这里会显示项目的业务版图。</p>
+      ) : loading ? (
+        <p className="pd-empty-note">正在读取领域地图…</p>
+      ) : error ? (
+        <p className="pd-empty-note">
+          {error}
+          <button className="link-retry" onClick={() => setReloadKey((n) => n + 1)}>重试</button>
+        </p>
+      ) : (areas || []).length === 0 ? (
+        <p className="pd-empty-note">
+          这次分析没有产出领域结构。重新分析后即可查看。
+          <button className="link-retry" onClick={onAnalyze}>重新分析</button>
+        </p>
       ) : (
         <>
-          {arch && (
-            <div className="dm-arch">
-              <span className="dm-arch-style">{arch.style || '架构'}</span>
-              <div className="dm-arch-layers">
-                {(arch.layers || []).map((l) => <span key={l} className="dm-layer">{l}</span>)}
-              </div>
-            </div>
-          )}
-          {stack.length > 0 && (
-            <div className="dm-block">
-              <div className="dm-label">技术栈</div>
-              <div className="dm-chips">
-                {stack.map((t) => (
-                  <span key={t.name} className="chip">
-                    {t.name}
-                    {t.category ? <em className="chip-cat">{normalizeCategory(t.category)}</em> : null}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-          {modules.length > 0 && (
-            <div className="dm-block">
-              <div className="dm-label">核心模块</div>
-              <div className="dm-grid">
-                {modules.map((m) => (
-                  <div key={m.name} className="dm-module">
-                    <span className="dm-module-name">{m.name}</span>
-                    <span className="dm-module-resp">{m.responsibility}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+          <DomainMap areas={areas || []} compact onOpen={onOpenMap} />
+          <div className="dmap-detail-foot">
+            <span>
+              {count.areas} 个业务领域，{count.capabilities} 个能力，{count.classes} 个类
+            </span>
+            <button className="btn-ghost" onClick={onOpenMap}>
+              <IconMap size={14} />
+              打开完整领域地图
+            </button>
+          </div>
         </>
       )}
     </div>
@@ -203,7 +227,7 @@ export default function ProjectDetail({
             </div>
           </div>
 
-          <DomainPreview overview={overview} />
+          <DomainSection project={project} onOpenMap={onOpenMap} onAnalyze={onAnalyze} />
 
           <ClassExplorer projectId={project.id} onOpenCode={onOpenCode} />
         </>

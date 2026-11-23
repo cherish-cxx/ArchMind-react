@@ -50,7 +50,9 @@ export const STAGE_LABELS = {
   SCAN: '扫描文件',
   AST: '解析代码',
   OVERVIEW: '生成概况',
-  DESCRIBE: '生成类描述'
+  DESCRIBE: '生成类描述',
+  DOMAIN: '业务建模',
+  DOMAIN_DESCRIBE: '领域描述'
 }
 
 export const stageLabel = (s) => STAGE_LABELS[s] || s || ''
