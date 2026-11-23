@@ -87,12 +87,12 @@ export default function Workbench({
 
   return (
     <div className="page page-scroll wb">
-      <header className="wb-hero">
-        <div className="wb-hero-copy">
-          <h1 className="wb-title">{loggedIn ? `你好，${name}` : '欢迎使用 ArchMind'}</h1>
-          <p className="wb-sub">
-            上传项目 ZIP 源码并一键分析，生成项目概况与领域结构；分析过的项目会逐步沉淀成你的「记忆地图」。
-          </p>
+      <header className="wb-top">
+        <div className="wb-top-id">
+          <span className="wb-mark" aria-hidden="true" />
+          <span className="wb-top-label">
+            {loggedIn && name ? `工作台 / ${name}` : '工作台'}
+          </span>
         </div>
         <button className="btn-primary wb-new" onClick={primary}>
           <IconPlus size={15} />
@@ -101,30 +101,46 @@ export default function Workbench({
       </header>
 
       {!loggedIn ? (
-        <div className="wb-empty wb-empty-wide">
-          <p className="wb-empty-title">登录后即可管理项目</p>
-          <p className="wb-empty-sub">新建项目 → 上传 ZIP 源码 → 自动生成项目概况与领域地图</p>
-          <button className="btn-primary wb-empty-btn" onClick={primary}>
-            <IconPlus size={15} />
-            <span>登录 / 新建项目</span>
-          </button>
-        </div>
+        <>
+          <div className="wb-intro">
+            <h1 className="wb-title">欢迎使用 ArchMind</h1>
+            <p className="wb-sub">
+              上传项目 ZIP 源码并一键分析，生成项目概况与领域结构；分析过的项目会逐步沉淀成你的「记忆地图」。
+            </p>
+          </div>
+          <div className="wb-empty wb-empty-wide">
+            <p className="wb-empty-title">登录后即可管理项目</p>
+            <p className="wb-empty-sub">新建项目 → 上传 ZIP 源码 → 自动生成项目概况与领域地图</p>
+            <button className="btn-primary wb-empty-btn" onClick={primary}>
+              <IconPlus size={15} />
+              <span>登录 / 新建项目</span>
+            </button>
+          </div>
+        </>
       ) : projects.length === 0 ? (
-        <div className="wb-empty wb-empty-wide">
-          <p className="wb-empty-title">还没有项目</p>
-          <p className="wb-empty-sub">新建项目 → 上传 ZIP 源码 → 自动生成项目概况与领域地图</p>
-          <button className="btn-primary wb-empty-btn" onClick={primary}>
-            <IconPlus size={15} />
-            <span>新建项目</span>
-          </button>
-        </div>
+        <>
+          <div className="wb-intro">
+            <h1 className="wb-title">你好，{name}</h1>
+            <p className="wb-sub">
+              上传项目 ZIP 源码并一键分析，生成项目概况与领域结构；分析过的项目会逐步沉淀成你的「记忆地图」。
+            </p>
+          </div>
+          <div className="wb-empty wb-empty-wide">
+            <p className="wb-empty-title">还没有项目</p>
+            <p className="wb-empty-sub">新建项目 → 上传 ZIP 源码 → 自动生成项目概况与领域地图</p>
+            <button className="btn-primary wb-empty-btn" onClick={primary}>
+              <IconPlus size={15} />
+              <span>新建项目</span>
+            </button>
+          </div>
+        </>
       ) : (
         <>
-          {latestConversation && latestProject && (
+          {latestConversation && latestProject ? (
             <section className="wb-resume">
               <div className="wb-resume-body">
                 <span className="wb-resume-label">继续上次</span>
-                <h2 className="wb-resume-title">{latestConversation.title || '新会话'}</h2>
+                <h1 className="wb-resume-title">{latestConversation.title || '新会话'}</h1>
                 <p className="wb-resume-meta">
                   {latestProject.name}
                   {latestConversation.turnCount > 0 ? ` · ${latestConversation.turnCount} 轮` : ''}
@@ -138,6 +154,13 @@ export default function Workbench({
                 继续探索
               </button>
             </section>
+          ) : (
+            <div className="wb-intro">
+              <h1 className="wb-title">你好，{name}</h1>
+              <p className="wb-sub">
+                上传项目 ZIP 源码并一键分析，生成项目概况与领域结构；分析过的项目会逐步沉淀成你的「记忆地图」。
+              </p>
+            </div>
           )}
 
           <div className="wb-desk">

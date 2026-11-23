@@ -124,7 +124,6 @@ export default function GraphEmptyState({
   return (
     <div className="graph-empty">
       <div className="ge-card ge-card-wide">
-        <div className="ge-eyebrow">代码探索</div>
         <h2 className="ge-title">从代码开始探索</h2>
         <p className="ge-sub">
           {overview?.summary || currentProject.description || '选择一个类作为起点，再向 Agent 提问。'}

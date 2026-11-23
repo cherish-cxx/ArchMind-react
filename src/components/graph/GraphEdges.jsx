@@ -8,10 +8,10 @@ import { NODE_H, NODE_W } from '../../graph/layout'
  * 会分不清。扇出改用线上的菱形标记。
  */
 const REL_STYLE = {
-  CALLS: { color: '#6b7280', width: 1.4, dash: undefined, hollow: false },
-  DEPENDS: { color: '#9333ea', width: 1.4, dash: '8 5', hollow: false },
-  EXTENDS: { color: '#2563eb', width: 2.6, dash: undefined, hollow: true },
-  IMPLEMENTS: { color: '#059669', width: 1.6, dash: '2 4', hollow: true }
+  CALLS: { color: '#6f7a71', width: 1.4, dash: undefined, hollow: false },
+  DEPENDS: { color: '#8a5f0a', width: 1.4, dash: '8 5', hollow: false },
+  EXTENDS: { color: '#2b4c7e', width: 2.6, dash: undefined, hollow: true },
+  IMPLEMENTS: { color: '#2f6f4f', width: 1.6, dash: '2 4', hollow: true }
 }
 
 const FALLBACK = REL_STYLE.CALLS
