@@ -3,6 +3,7 @@ import { capability as fetchCapability, domainMap as fetchDomainMap } from '../a
 import DomainMap from '../components/domain/DomainMap'
 import CapabilityGrid from '../components/domain/CapabilityGrid'
 import ChainGraph from '../components/domain/ChainGraph'
+import ProjectRail from '../components/ProjectRail'
 import { capabilityLabel, parseCapability, splitAreas, totals } from '../utils/domain'
 import { stageLabel } from '../statusMeta'
 import { IconArrowLeft, IconMap, IconRefresh, IconUpload } from '../icons'
@@ -45,7 +46,8 @@ export default function DomainMapPage({
   onUpload,
   onOpenLogin,
   onGoProjects,
-  onOpenCode
+  onOpenCode,
+  onOpenPage
 }) {
   const projectId = currentProject?.id || null
   const scrollRef = useRef(null)
@@ -195,7 +197,7 @@ export default function DomainMapPage({
         <div className="dmap-empty">
           <p className="dmap-empty-title">领域地图读取失败</p>
           <p className="dmap-empty-text">{analyzeError}</p>
-          <button type="button" className="btn-primary dmap-empty-btn" onClick={onAnalyze}>
+          <button type="button" className="btn-ghost dmap-empty-btn" onClick={onAnalyze}>
             <IconRefresh size={14} />
             重新分析
           </button>
@@ -207,12 +209,12 @@ export default function DomainMapPage({
         <p className="dmap-empty-title">{copy.title}</p>
         <p className="dmap-empty-text">{copy.text}</p>
         {copy.action === 'upload' ? (
-          <button type="button" className="btn-primary dmap-empty-btn" onClick={onUpload}>
+          <button type="button" className="btn-ghost dmap-empty-btn" onClick={onUpload}>
             <IconUpload size={14} />
             上传源码
           </button>
         ) : (
-          <button type="button" className="btn-primary dmap-empty-btn" onClick={onAnalyze}>
+          <button type="button" className="btn-ghost dmap-empty-btn" onClick={onAnalyze}>
             <IconRefresh size={14} />
             重新分析
           </button>
@@ -228,7 +230,7 @@ export default function DomainMapPage({
         <div className="dmap-empty">
           <p className="dmap-empty-title">领域地图读取失败</p>
           <p className="dmap-empty-text">{loadError}</p>
-          <button type="button" className="btn-primary dmap-empty-btn" onClick={() => loadMap(projectId)}>
+          <button type="button" className="btn-ghost dmap-empty-btn" onClick={() => loadMap(projectId)}>
             重试
           </button>
         </div>
@@ -340,7 +342,7 @@ export default function DomainMapPage({
           <div className="dmap-empty">
             <p className="dmap-empty-title">能力链路读取失败</p>
             <p className="dmap-empty-text">{detail.error}</p>
-            <button type="button" className="btn-primary dmap-empty-btn" onClick={() => loadDetail(cap, true)}>
+            <button type="button" className="btn-ghost dmap-empty-btn" onClick={() => loadDetail(cap, true)}>
               重试
             </button>
           </div>
@@ -360,17 +362,16 @@ export default function DomainMapPage({
 
   return (
     <main className="page page-scroll dmap-page" ref={scrollRef}>
+      <ProjectRail
+        project={currentProject}
+        page="domain"
+        analyzing={analyzing}
+        taskProgress={taskProgress}
+        onUpload={onUpload}
+        onAnalyze={onAnalyze}
+        onOpenPage={onOpenPage}
+      />
       {crumbs}
-      {analyzing && stack.length === 1 && (
-        <div className="dmap-progress">
-          <div className="dmap-progress-track">
-            <div className="dmap-progress-bar" style={{ width: `${Math.max(taskProgress, 2)}%` }} />
-          </div>
-          <span className="dmap-progress-text">
-            {stageLabel(taskStage) || '分析中'} · {taskProgress}%
-          </span>
-        </div>
-      )}
 
       {!loggedIn ? (
         <div className="dmap-empty">

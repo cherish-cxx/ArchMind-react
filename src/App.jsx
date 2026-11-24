@@ -8,14 +8,31 @@ import ProjectDetail from './components/ProjectDetail'
 import DomainMapPage from './pages/DomainMapPage'
 import CodeDrawer from './components/code/CodeDrawer'
 import MemoryPage from './pages/MemoryPage'
+import AgentDock from './components/agent/AgentDock'
 import { login as apiLogin, logout as apiLogout } from './api/auth'
-import { listConversations } from './api/agent'
+import { listConversations, navigate as apiNavigate } from './api/agent'
 import {
   analyze, listProjects, createProject, createProjectWithSource, upload, projectOverview, deleteProject
 } from './api/project'
 import { useSession, setLogin as storeSetLogin, clearSession } from './auth/sessionStore'
 import { readNav, writeNav } from './state/navStore'
 import useTaskPolling from './hooks/useTaskPolling'
+import { useAgentChat } from './hooks/useAgentChat'
+import {
+  appendAgentMessage,
+  appendErrorMessage,
+  getConversationState
+} from './state/conversationStore'
+import { saveLastConversationId } from './state/persistence'
+import { getGraphState, setGraphFocus, setGraphSelected } from './state/graphStore'
+import { getPagesState, setPageSelected } from './state/pagesStore'
+import { ownerUid } from './graph/model'
+import {
+  applyGraphResponse,
+  flushViewport,
+  registerViewportFlush,
+  requestFocus
+} from './state/agentBridge'
 
 const MAX_UPLOAD_MB = 500
 const MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1024 * 1024
@@ -69,6 +86,38 @@ export default function App() {
   // 和画布焦点是**两个锚点** —— 这个只决定「问的是哪个方法」。
   const [methodFocus, setMethodFocus] = useState(null)
 
+  // Agent 面板常驻所有项目页面，因此对话状态放在这里，全局只留一个实例：
+  // 两个实例会各有一把串行锁，并发两轮会互相覆盖后端的上下文。
+  const [panelCollapsed, setPanelCollapsed] = useState(
+    () => typeof window !== 'undefined' && window.innerWidth < 1100
+  )
+  const [panelWidth, setPanelWidth] = useState(() => {
+    const w = typeof window !== 'undefined' ? window.innerWidth : 1400
+    return Math.max(280, Math.min(380, Math.round(w * 0.26)))
+  })
+  const [navigating, setNavigating] = useState(false)
+
+  // 锚点只在发问那一刻从 store 读，不订阅——否则图一布局，整个 App 都要重渲染
+  const getAgentFocus = useCallback(() => {
+    const pages = getPagesState()
+    const active = pages.pages.find((p) => p.id === pages.activeId)
+    if (active?.kind === 'focus' && active.centerUid) {
+      return { type: 'CLASS', uid: active.selectedUid || active.centerUid }
+    }
+    const uid = getGraphState().focusUid
+    return uid ? { type: 'CLASS', uid } : null
+  }, [])
+
+  const getMethodUid = useCallback(() => methodFocus?.uid || null, [methodFocus])
+
+  const agent = useAgentChat({
+    projectId: currentProject?.id || null,
+    getFocus: getAgentFocus,
+    getMethodUid,
+    onGraph: applyGraphResponse,
+    beforeSend: flushViewport
+  })
+
   const analyzeSeq = useRef(0) // 使切换项目/退出后在途的分析请求作废
   const currentProjectRef = useRef(null)
   useEffect(() => { currentProjectRef.current = currentProject }, [currentProject])
@@ -92,6 +141,69 @@ export default function App() {
   // 上传文件选择（供详情页 / 我的项目共用）
   const uploadInputRef = useRef(null)
   const uploadTargetRef = useRef(null)
+
+  // ========== Agent 面板动作 ==========
+  // 退回去是零 token 的后端出栈；画布不在时，图的变化由 agentBridge 暂存
+  const handleAgentBack = useCallback(async () => {
+    const cid = getConversationState().conversationId
+    const projectId = currentProjectRef.current?.id
+    const { pending, sessionExpired } = agent.conversation
+    if (!projectId || !cid || pending || sessionExpired || navigating) return
+    setNavigating(true)
+    try {
+      const response = await apiNavigate({ projectId, conversationId: cid, op: 'BACK' })
+      appendAgentMessage(response)
+      await applyGraphResponse(response)
+    } catch (err) {
+      appendErrorMessage(err?.message || '退回失败')
+    } finally {
+      setNavigating(false)
+    }
+  }, [agent.conversation, navigating])
+
+  const canAgentBack =
+    Boolean(agent.conversation.conversationId) &&
+    !agent.conversation.pending &&
+    !agent.conversation.sessionExpired &&
+    !navigating
+
+  const handleNewConversation = useCallback(() => {
+    agent.startNew()
+    const projectId = currentProjectRef.current?.id
+    if (projectId) saveLastConversationId(projectId, null)
+  }, [agent.startNew])
+
+  // 引用跳转：在地图上就地定位，在别的页面先去地图，再由画布消费 uid
+  const handleCitation = useCallback((uid) => {
+    requestFocus(ownerUid(uid))
+    setPage((cur) => (cur === 'memory' ? cur : 'memory'))
+  }, [])
+
+  const handleClearFocus = useCallback(() => {
+    const pages = getPagesState()
+    const active = pages.pages.find((p) => p.id === pages.activeId)
+    if (active?.kind === 'focus') {
+      setPageSelected(active.id, null)
+      return
+    }
+    setGraphFocus(null)
+    setGraphSelected(null)
+  }, [])
+
+  const handlePanelResize = useCallback((clientX) => {
+    const w = Math.min(560, Math.max(300, window.innerWidth - clientX))
+    setPanelWidth(w)
+  }, [])
+
+  // 窗口变窄时收起面板：面板现在是全页面常驻，不收起会把主内容挤到 0 宽
+  useEffect(() => {
+    const onResize = () => {
+      if (window.innerWidth < 1100) setPanelCollapsed(true)
+    }
+    window.addEventListener('resize', onResize)
+    if (window.innerWidth < 1100) setPanelCollapsed(true)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
 
   // ========== 项目列表 ==========
   const reloadProjects = useCallback(async () => {
@@ -614,6 +726,7 @@ export default function App() {
           onOpenCode={handleOpenCode}
           onOpenLogin={() => setLoginOpen(true)}
           onGoProjects={() => setPage('projects')}
+          onOpenPage={setPage}
           methodFocus={methodFocus}
           onClearMethodFocus={() => setMethodFocus(null)}
         />
@@ -649,6 +762,7 @@ export default function App() {
               onOpenLogin={() => setLoginOpen(true)}
               onGoProjects={() => setPage('projects')}
               onOpenCode={handleOpenCode}
+              onOpenPage={setPage}
             />
           ) : page === 'projects' ? (
             <ProjectList
@@ -671,12 +785,38 @@ export default function App() {
               onBack={() => setPage('projects')}
               onUpload={() => currentProject && askUpload(currentProject)}
               onAnalyze={() => runAnalyze(currentProject?.id, true)}
-              onOpenMap={() => currentProject && openProjectDomain(currentProject)}
+              onOpenDomain={() => currentProject && openProjectDomain(currentProject)}
+              onOpenPage={setPage}
               onOpenCode={handleOpenCode}
               onDelete={() => handleDelete(currentProject)}
             />
           )}
         </main>
+      )}
+
+      {currentProject && (
+        <AgentDock
+          collapsed={panelCollapsed}
+          onToggle={() => setPanelCollapsed((v) => !v)}
+          width={Math.min(panelWidth, Math.max(240, Math.round(window.innerWidth * 0.55)))}
+          onResize={handlePanelResize}
+          projectId={currentProject.id}
+          projectName={currentProject.name}
+          messages={agent.conversation.messages}
+          pending={agent.conversation.pending}
+          sessionExpired={agent.conversation.sessionExpired}
+          onSend={agent.send}
+          onCancel={agent.cancel}
+          onRetry={agent.retry}
+          onNewConversation={handleNewConversation}
+          onBack={handleAgentBack}
+          canBack={canAgentBack}
+          navigating={navigating}
+          onCitation={handleCitation}
+          onClearFocus={handleClearFocus}
+          methodFocus={methodFocus}
+          onClearMethodFocus={() => setMethodFocus(null)}
+        />
       )}
 
       {notice && <div className="toast">{notice}</div>}

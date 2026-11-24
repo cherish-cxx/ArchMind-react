@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { statusMeta, nextStep, needsAttention } from '../statusMeta'
+import { statusMeta, nextStep, needsAttention, isRequiredStep } from '../statusMeta'
 import { groupConversations } from '../utils/conversationGroups'
 import ConversationGroups from './conversations/ConversationGroups'
 import { IconPlus } from '../icons'
@@ -187,7 +187,7 @@ export default function Workbench({
                       <span className="wb-ledger-time">{projectActivity(p)}</span>
                       <button
                         type="button"
-                        className={`wb-step${step.action === 'map' ? ' is-primary' : ''}`}
+                        className={`wb-step${isRequiredStep(step) ? '' : ' is-quiet'}`}
                         onClick={(e) => {
                           e.stopPropagation()
                           runStep(p, step)

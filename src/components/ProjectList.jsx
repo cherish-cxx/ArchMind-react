@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { statusMeta, nextStep } from '../statusMeta'
+import { statusMeta, nextStep, isRequiredStep } from '../statusMeta'
 import { IconMore, IconTrash, IconRefresh, IconUpload, IconFolder } from '../icons'
 
 function fmtDate(v) {
@@ -63,7 +63,7 @@ export default function ProjectList({ projects = [], onOpenProject, onOpenMap, o
                 <span className="plist-date">{fmtDate(p.createTime)}</span>
                 <button
                   type="button"
-                  className={`plist-action${step.action === 'map' ? ' is-primary' : ''}`}
+                  className={`plist-action${isRequiredStep(step) ? '' : ' is-quiet'}`}
                   onClick={(e) => {
                     e.stopPropagation()
                     runStep(p)

@@ -42,7 +42,8 @@ export default function ProjectInfo({
   }
 
   const projectName = currentProject?.name
-  const canAnalyze = !!currentProject
+  // 没有源码就分析不了：按钮可以disabled，但不该点下去才由后端报错
+  const canAnalyze = !!currentProject && currentProject.analysisStatus !== 'NO_SOURCE'
 
   // 概况字段对齐后端 ProjectOverviewResponse；语言缺失时用 file.language 聚合兜底
   const { language, stack } = splitTechStack(overview?.techStack, overview?.languages)

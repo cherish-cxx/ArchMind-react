@@ -5,8 +5,6 @@ import {
   IconBot,
   IconPanelHide,
   IconPanelShow,
-  IconMessage,
-  IconMap,
   IconRefresh,
   IconArrowLeft
 } from '../../icons'
@@ -179,6 +177,7 @@ export default function AgentPanel({
   width,
   onResize,
   projectId,
+  projectName,
   messages = [],
   pending,
   sessionExpired,
@@ -244,12 +243,6 @@ export default function AgentPanel({
         <button className="icon-btn" onClick={onToggle} title="展开 ArchMind Agent">
           <IconPanelShow size={16} />
         </button>
-        <button className="icon-btn" onClick={onToggle} title="对话">
-          <IconMessage size={16} />
-        </button>
-        <button className="icon-btn" onClick={onToggle} title="图谱助手">
-          <IconMap size={16} />
-        </button>
       </aside>
     )
   }
@@ -272,6 +265,8 @@ export default function AgentPanel({
         <div className="ai-title">
           <IconBot size={16} />
           <span>ArchMind Agent</span>
+          {/* 面板常驻在所有页面，必须写清楚这轮对话属于哪个项目 */}
+          {projectName && <span className="ai-project" title={projectName}>{projectName}</span>}
           <span
             className={`status-dot ${projectId ? '' : 'offline'}`}
             title={projectId ? '已连接项目' : '未选择项目'}

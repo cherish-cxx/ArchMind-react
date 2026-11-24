@@ -1066,12 +1066,6 @@ ul { list-style: none; }
   transition: all var(--transition);
 }
 .wb-step:hover { border-color: var(--primary-border); color: var(--primary); background: var(--primary-bg); }
-.wb-step.is-primary {
-  border-color: var(--primary);
-  background: var(--primary);
-  color: #fff;
-}
-.wb-step.is-primary:hover { background: var(--primary-hover); border-color: var(--primary-hover); color: #fff; }
 .wb-step:focus-visible, .plist-action:focus-visible { outline: 2px solid var(--primary-border); outline-offset: 1px; }
 
 .wb-todo-list { border-top: 1px solid var(--border-light); }
@@ -1151,8 +1145,6 @@ ul { list-style: none; }
   transition: all var(--transition);
 }
 .plist-action:hover { border-color: var(--primary-border); color: var(--primary); background: var(--primary-bg); }
-.plist-action.is-primary { background: var(--primary); border-color: var(--primary); color: #fff; }
-.plist-action.is-primary:hover { background: var(--primary-hover); border-color: var(--primary-hover); color: #fff; }
 .plist-menu-wrap { position: relative; flex-shrink: 0; }
 .plist-more { border: 1px solid transparent; }
 .plist-row:hover .plist-more { border-color: var(--border); background: var(--sheet); }
@@ -2229,14 +2221,15 @@ html.theme-switching *::after {
 .side-section .btn-new { margin-top: 14px; margin-bottom: 0; }
 .btn-new {
   height: 34px;
-  border: 1px solid var(--action);
+  border: 1px solid var(--rule);
   border-radius: 2px;
-  background: var(--action);
-  color: var(--on-action);
+  background: var(--sheet);
+  color: var(--ink-1);
   font-size: 13px;
   font-weight: 500;
 }
-.btn-new:hover { background: var(--action-hover); border-color: var(--action-hover); }
+/* 侧栏是常驻栏：新建是全局入口，不是本页主操作，不抢橙色 */
+.btn-new:hover { background: var(--measure-soft); border-color: var(--measure-border); color: var(--measure); }
 .side-nav {
   margin-top: 14px;
   padding-top: 12px;
@@ -2255,9 +2248,9 @@ html.theme-switching *::after {
   background: transparent;
   color: var(--ink-1);
   font-weight: 600;
-  border-left-color: var(--action);
+  border-left-color: var(--measure);
 }
-.nav-item.active svg { color: var(--action); }
+.nav-item.active svg { color: var(--measure); }
 .recent { border-top: 1px solid var(--rule-soft); }
 .side-label { font-size: 12px; color: var(--ink-3); }
 .recent-item { border-radius: 0; }
@@ -2299,6 +2292,8 @@ html.theme-switching *::after {
   border-bottom: 1px solid var(--rule);
   background: var(--paper);
   gap: 8px;
+  /* 项目与位置已移到流程轨，这一行只剩工具，右对齐 */
+  justify-content: flex-end;
 }
 .breadcrumb { font-size: 12px; }
 .crumb { border-radius: 0; color: var(--ink-3); }
@@ -2423,9 +2418,9 @@ html.theme-switching *::after {
   white-space: nowrap;
 }
 .btn-analyze:hover:not(:disabled) {
-  border-color: var(--action-border);
-  color: var(--action);
-  background: var(--action-soft);
+  border-color: var(--measure-border);
+  color: var(--measure);
+  background: var(--measure-soft);
 }
 .skl { border-radius: 0; }
 
@@ -2487,10 +2482,19 @@ html.theme-switching *::after {
   background: #fbf6ec;
 }
 .graph-node.has-gap { border-color: var(--warn); }
-.graph-node.selected,
+/* 选中是「我在看它」，焦点是「下一轮提问用的锚点」——两件事，必须能同时分辨 */
+.graph-node.selected {
+  border-color: var(--measure);
+  background: var(--measure-soft);
+  box-shadow: none;
+  z-index: 5;
+}
 .graph-node.focused {
   border-color: var(--measure);
-  box-shadow: 0 0 0 2px var(--measure-soft);
+  outline: 2px solid var(--measure);
+  outline-offset: 2px;
+  box-shadow: none;
+  z-index: 6;
 }
 .graph-node.tier-core::before,
 .graph-node.tier-secondary::before {
@@ -2602,13 +2606,13 @@ html.theme-switching *::after {
   background: var(--sheet);
   border-color: var(--rule);
 }
-.ge-chip:hover { border-color: var(--action-border); background: var(--action-soft); }
+.ge-chip:hover { border-color: var(--measure-border); background: var(--measure-soft); }
 .ge-pkg { border-radius: 2px; background: var(--sheet); border-color: var(--rule); }
-.ge-pkg:hover { border-color: var(--action-border); background: var(--action-soft); }
+.ge-pkg:hover { border-color: var(--measure-border); background: var(--measure-soft); }
 .ge-pkg.active { border-color: var(--measure); color: var(--measure); background: var(--measure-soft); }
 .ge-pkg-classes { border-radius: 2px; background: var(--paper); }
 .ge-class-btn { border-radius: 2px; background: var(--sheet); border-color: var(--rule); }
-.ge-class-btn:hover { border-color: var(--action-border); background: var(--action-soft); color: var(--action); }
+.ge-class-btn:hover { border-color: var(--measure-border); background: var(--measure-soft); color: var(--measure); }
 .ge-progress { border-radius: 0; background: var(--rule-soft); }
 .ge-progress span { border-radius: 0; background: var(--action); }
 
@@ -2690,9 +2694,9 @@ html.theme-switching *::after {
   color: var(--ink-2);
 }
 .btn-quick:hover {
-  border-color: var(--action-border);
-  background: var(--action-soft);
-  color: var(--action);
+  border-color: var(--measure-border);
+  background: var(--measure-soft);
+  color: var(--measure);
 }
 
 /* 工作台 */
@@ -2770,9 +2774,18 @@ html.theme-switching *::after {
   background: transparent;
   font-size: 12px;
 }
-.wb-step:hover { border-color: var(--action-border); color: var(--action); background: var(--action-soft); }
-.wb-step.is-primary { background: var(--action); border-color: var(--action); color: var(--on-action); }
-.wb-step.is-primary:hover { background: var(--action-hover); border-color: var(--action-hover); }
+.wb-step:hover { border-color: var(--measure-border); color: var(--measure); background: var(--measure-soft); }
+/* 已分析的项目只剩「继续探索」：可选动作，退成文字，别和必做步骤抢同一个重量 */
+.wb-step.is-quiet {
+  border-color: transparent;
+  background: transparent;
+  color: var(--ink-3);
+}
+.wb-step.is-quiet:hover {
+  border-color: var(--rule);
+  color: var(--measure);
+  background: var(--bg-hover);
+}
 .wb-todo-list { border-top: 1px solid var(--rule); }
 .wb-todo-row { padding: 11px 2px; border-bottom: 1px solid var(--rule-soft); }
 .wb-todo-name { font-size: 13px; }
@@ -2820,9 +2833,17 @@ html.theme-switching *::after {
   background: transparent;
   font-size: 12px;
 }
-.plist-action:hover { border-color: var(--action-border); color: var(--action); background: var(--action-soft); }
-.plist-action.is-primary { background: var(--action); border-color: var(--action); color: var(--on-action); }
-.plist-action.is-primary:hover { background: var(--action-hover); border-color: var(--action-hover); }
+.plist-action:hover { border-color: var(--measure-border); color: var(--measure); background: var(--measure-soft); }
+.plist-action.is-quiet {
+  border-color: transparent;
+  background: transparent;
+  color: var(--ink-3);
+}
+.plist-action.is-quiet:hover {
+  border-color: var(--rule);
+  color: var(--measure);
+  background: var(--bg-hover);
+}
 .row-menu {
   border-radius: 2px;
   background: var(--sheet);
@@ -2840,9 +2861,11 @@ html.theme-switching *::after {
   border-color: var(--rule);
   background: transparent;
 }
-.pd-btn:hover:not(:disabled) { border-color: var(--action-border); color: var(--action); background: var(--action-soft); }
+.pd-btn:hover:not(:disabled) { border-color: var(--measure-border); color: var(--measure); background: var(--measure-soft); }
 .pd-btn.pd-btn-primary { background: var(--action); border-color: var(--action); color: var(--on-action); }
 .pd-btn.pd-btn-primary:hover:not(:disabled) { background: var(--action-hover); border-color: var(--action-hover); }
+/* 删除是危险动作，不是主操作：平时只留文字，悬停才显红 */
+.pd-btn.danger { border-color: transparent; color: var(--ink-3); }
 .pd-section {
   border: 1px solid var(--rule);
   border-radius: 2px;
@@ -2868,6 +2891,16 @@ html.theme-switching *::after {
 .ai-panel { background: var(--sheet); border-left: 1px solid var(--rule); }
 .ai-header { padding: 12px 14px; border-bottom: 1px solid var(--rule); }
 .ai-title { font-size: 14px; font-weight: 600; }
+.ai-project {
+  max-width: 130px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--ink-3);
+}
 .status-dot { width: 6px; height: 6px; border-radius: 0; }
 .ai-banner {
   background: #fbf6ec;
@@ -3221,6 +3254,105 @@ html.theme-switching *::after {
   }
 }
 
+/* ========== A · 测绘图：项目流程轨 ========== */
+.rail {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  height: 34px;
+  margin-bottom: 18px;
+  border-bottom: 1px solid var(--rule);
+  font-size: 12px;
+}
+.rail.is-bleed {
+  flex-shrink: 0;
+  margin-bottom: 0;
+  padding: 0 20px;
+  background: var(--paper);
+}
+
+.rail-project { display: flex; align-items: center; flex-shrink: 0; min-width: 0; }
+.rail-project-name {
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  color: var(--ink-3);
+}
+.rail-select {
+  height: 22px;
+  max-width: 180px;
+  padding: 0 2px;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  background: transparent;
+  color: var(--ink-1);
+  font: inherit;
+  font-weight: 600;
+}
+.rail-select:hover { border-color: var(--rule); background: var(--sheet); }
+
+.rail-stations { display: flex; align-items: center; flex: 1; min-width: 0; }
+.rail-station { display: flex; align-items: center; flex-shrink: 0; }
+.rail-station:first-child .rail-seg { display: none; }
+.rail-seg { width: 26px; height: 1px; margin: 0 9px; background: var(--rule); }
+.rail-station.is-blocked .rail-seg { background: var(--rule-soft); }
+
+.rail-station-body,
+.rail-station-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 33px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink-2);
+  font: inherit;
+  white-space: nowrap;
+}
+.rail-station.is-blocked .rail-station-body { color: var(--ink-4); }
+.rail-station.is-error .rail-station-body { color: var(--ink-1); }
+
+.rail-dot { width: 6px; height: 6px; flex-shrink: 0; border: 1px solid var(--rule); background: transparent; }
+.rail-station.is-done .rail-dot { border-color: var(--ink-3); background: var(--ink-3); }
+.rail-station.is-blocked .rail-dot { border-color: var(--rule-soft); }
+
+/* 你在这里：蓝色底标，和「已走过 / 走不到」区分开 */
+.rail-station.is-current .rail-station-body {
+  color: var(--ink-1);
+  font-weight: 600;
+  box-shadow: inset 0 -2px 0 var(--measure);
+}
+.rail-station.is-current .rail-dot { border-color: var(--measure); background: var(--measure); }
+
+/* 失败标红，即使正处于该阶段也保持红点 */
+.rail-station.is-error .rail-dot { border-color: var(--bad); background: var(--bad); }
+
+.rail-station.is-clickable .rail-station-btn { cursor: pointer; }
+.rail-station.is-clickable .rail-station-btn:hover { color: var(--measure); }
+.rail-station.is-clickable .rail-station-btn:hover .rail-dot { border-color: var(--measure); background: var(--measure); }
+
+.rail-note {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--ink-3);
+}
+
+.rail-next { display: flex; align-items: center; flex-shrink: 0; }
+.rail-action { height: 26px; padding: 0 12px; font-size: 12px; }
+
+@media (max-width: 900px) {
+  .rail { gap: 10px; }
+  .rail-project-name, .rail-select { max-width: 110px; }
+  .rail-seg { width: 14px; margin: 0 6px; }
+  .rail-note { display: none; }
+}
+
 /* ========== A · 测绘图：深色（同一套语义） ========== */
 :root[data-theme="dark"] {
   color-scheme: dark;
@@ -3308,11 +3440,8 @@ html.theme-switching *::after {
   color: var(--ink-1);
   box-shadow: inset 2px 0 0 var(--action);
 }
-[data-theme="dark"] .wb-step.is-primary,
-[data-theme="dark"] .plist-action.is-primary,
 [data-theme="dark"] .btn-primary,
-[data-theme="dark"] .btn-send,
-[data-theme="dark"] .btn-new {
+[data-theme="dark"] .btn-send {
   color: var(--on-action);
 }
 [data-theme="dark"] .wb-empty { background: transparent; }
@@ -3340,6 +3469,7 @@ html.theme-switching *::after {
 [data-theme="dark"] .graph-node.kind-enum { background: #241f14; border-color: var(--warn); }
 [data-theme="dark"] .graph-node.kind-interface .gn-name { color: #9fe3c2; }
 [data-theme="dark"] .graph-node.kind-enum .gn-name { color: #e9c27a; }
+[data-theme="dark"] .graph-node.selected { background: var(--measure-soft); }
 [data-theme="dark"] .gn-detail { background: var(--sheet); border-color: var(--rule); }
 [data-theme="dark"] .gn-focus { background: var(--sheet); border-color: var(--rule); }
 [data-theme="dark"] .gn-tier-label.is-core { background: var(--action-soft); color: var(--action); }

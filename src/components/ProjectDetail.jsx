@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react'
-import { statusMeta, stageLabel, nextStep } from '../statusMeta'
+import { statusMeta } from '../statusMeta'
 import { domainMap } from '../api/domain'
 import { splitAreas, totals } from '../utils/domain'
 import DomainMap from './domain/DomainMap'
 import ClassExplorer from './ClassExplorer'
 import McpAccess from './McpAccess'
+import ProjectRail from './ProjectRail'
 import {
-  IconArrowLeft, IconUpload, IconRefresh, IconTrash, IconX, IconMap
+  IconArrowLeft, IconUpload, IconRefresh, IconTrash, IconX
 } from '../icons'
 
 function TechTag({ children }) {
@@ -78,10 +79,6 @@ function DomainSection({ project, onOpenMap, onAnalyze }) {
             <span>
               {count.areas} 个业务领域，{count.capabilities} 个能力，{count.classes} 个类
             </span>
-            <button className="btn-ghost" onClick={onOpenMap}>
-              <IconMap size={14} />
-              打开完整领域地图
-            </button>
           </div>
         </>
       )}
@@ -91,7 +88,7 @@ function DomainSection({ project, onOpenMap, onAnalyze }) {
 
 export default function ProjectDetail({
   project, overview, loading, analyzing, taskProgress = 0, taskStage = '', error,
-  onBack, onUpload, onAnalyze, onOpenMap, onOpenCode, onDelete
+  onBack, onUpload, onAnalyze, onOpenDomain, onOpenPage, onOpenCode, onDelete
 }) {
   if (!project) {
     return (
@@ -103,16 +100,8 @@ export default function ProjectDetail({
   }
 
   const st = statusMeta(project.analysisStatus)
-  const step = nextStep(project)
   const hasSource = project.analysisStatus !== 'NO_SOURCE' && project.analysisStatus !== null
   const canAnalyze = hasSource && !analyzing && !loading
-  const primaryAction = step.action === 'map'
-    ? { label: '进入记忆地图', onClick: onOpenMap, icon: <IconMap size={14} /> }
-    : step.action === 'upload'
-      ? { label: '上传源码', onClick: onUpload, icon: <IconUpload size={14} /> }
-      : step.action === 'analyze'
-        ? { label: step.label, onClick: onAnalyze, icon: <IconRefresh size={14} />, disabled: !canAnalyze }
-        : null
 
   return (
     <div className="page page-scroll pdetail">
@@ -128,35 +117,23 @@ export default function ProjectDetail({
           <p className="pd-desc">{project.description || '暂无项目描述'}</p>
         </div>
         <div className="pd-actions">
-          {primaryAction && (
-            <button
-              className="pd-btn pd-btn-primary"
-              onClick={primaryAction.onClick}
-              disabled={primaryAction.disabled}
-              title={primaryAction.label}
-            >
-              {primaryAction.icon}
-              {primaryAction.label}
-            </button>
-          )}
-          {step.action !== 'upload' && (
-            <button className="btn-ghost pd-btn" onClick={onUpload} title="向该项目上传 / 更新 ZIP 源码">
-              <IconUpload size={14} />
-              上传源码
-            </button>
-          )}
-          {step.action !== 'analyze' && (
-            <button
-              className="btn-ghost pd-btn"
-              onClick={onAnalyze}
-              disabled={!canAnalyze}
-              title={hasSource ? '重新分析（覆盖旧的概况结果）' : '需先上传源码'}
-            >
-              <IconRefresh size={14} />
-              {analyzing
-                ? `分析中 ${taskProgress}%`
-                : project.analysisStatus === 'PENDING' ? '开始分析' : '重新分析'}
-            </button>
+          {/* 主操作归流程轨；头部只留维护性动作，避免同屏两个主按钮 */}
+          {hasSource && (
+            <>
+              <button className="btn-ghost pd-btn" onClick={onUpload} title="上传新的 ZIP 覆盖当前源码">
+                <IconUpload size={14} />
+                更新源码
+              </button>
+              <button
+                className="btn-ghost pd-btn"
+                onClick={onAnalyze}
+                disabled={!canAnalyze}
+                title="重新分析（覆盖旧的概况结果）"
+              >
+                <IconRefresh size={14} />
+                重新分析
+              </button>
+            </>
           )}
           <button className="btn-ghost pd-btn danger" onClick={onDelete}>
             <IconTrash size={14} />
@@ -165,16 +142,15 @@ export default function ProjectDetail({
         </div>
       </div>
 
-      {analyzing && (
-        <div className="pd-progress">
-          <div className="pd-progress-track">
-            <div className="pd-progress-bar" style={{ width: `${Math.max(taskProgress, 2)}%` }} />
-          </div>
-          <span className="pd-progress-text">
-            {stageLabel(taskStage) || '分析中'} · {taskProgress}%
-          </span>
-        </div>
-      )}
+      <ProjectRail
+        project={project}
+        page="detail"
+        analyzing={analyzing}
+        taskProgress={taskProgress}
+        onUpload={onUpload}
+        onAnalyze={onAnalyze}
+        onOpenPage={onOpenPage}
+      />
 
       {error && (
         <div className="pd-error">
@@ -188,20 +164,9 @@ export default function ProjectDetail({
           <p className="wb-empty-title">该项目尚未生成概况</p>
           <p className="wb-empty-sub">
             {hasSource
-              ? '点击「重新分析」生成项目概况与领域结构'
-              : '先向该项目上传 ZIP 源码，再进行分析'}
+              ? '运行分析后，这里会显示概况、领域结构与代码图谱。'
+              : '上传 ZIP 源码后，分析会生成概况、领域结构与代码图谱。'}
           </p>
-          {hasSource ? (
-            <button className="btn-primary wb-empty-btn" onClick={onAnalyze}>
-              <IconRefresh size={15} />
-              开始分析
-            </button>
-          ) : (
-            <button className="btn-primary wb-empty-btn" onClick={onUpload}>
-              <IconUpload size={15} />
-              上传源码
-            </button>
-          )}
         </div>
       ) : !overview && loading ? (
         <div className="pd-loading">正在读取概况…</div>
@@ -227,7 +192,7 @@ export default function ProjectDetail({
             </div>
           </div>
 
-          <DomainSection project={project} onOpenMap={onOpenMap} onAnalyze={onAnalyze} />
+          <DomainSection project={project} onOpenMap={onOpenDomain} onAnalyze={onAnalyze} />
 
           <ClassExplorer projectId={project.id} onOpenCode={onOpenCode} />
         </>

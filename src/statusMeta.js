@@ -44,6 +44,21 @@ export function nextStep(project) {
 export const needsAttention = (project) =>
   Boolean(project) && project.analysisStatus !== 'COMPLETED'
 
+/**
+ * 主动作 vs 可选延续。
+ *
+ * 上传/分析/查看进度是「不做就卡住」的必做步骤，按钮要有边框撑住；
+ * 继续探索是「做完了，也可以继续」的可选动作，应当退成次要文字，
+ * 免得一整列项目都长出同样重的按钮。
+ */
+const REQUIRED_STEPS = new Set([
+  NEXT_ACTION.UPLOAD,
+  NEXT_ACTION.ANALYZE,
+  NEXT_ACTION.PROGRESS
+])
+
+export const isRequiredStep = (step) => REQUIRED_STEPS.has(step?.action)
+
 
 // 后端 AnalysisStage 的中文名
 export const STAGE_LABELS = {

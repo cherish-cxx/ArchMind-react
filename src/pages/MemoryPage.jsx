@@ -1,16 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import TopBar from '../components/TopBar'
 import ProjectInfo from '../components/ProjectInfo'
+import ProjectRail from '../components/ProjectRail'
 import GraphCanvas from '../components/graph/GraphCanvas'
 import GraphEmptyState from '../components/graph/GraphEmptyState'
 import GraphStatusBar from '../components/graph/GraphStatusBar'
 import GraphTabs from '../components/graph/GraphTabs'
-import AgentPanel from '../components/agent/AgentPanel'
 import { listClasses, classRelations } from '../api/project'
 import {
   getConversation as apiGetConversation,
-  getConversationMessages,
-  navigate as apiNavigate
+  getConversationMessages
 } from '../api/agent'
 import { classRelationsToGraph, classToNode } from '../graph/adapters'
 import { buildCumulativeModel, buildFocusModel, pageSnapshot } from '../graph/view'
@@ -48,8 +47,6 @@ import {
   useGraphState
 } from '../state/graphStore'
 import {
-  appendAgentMessage,
-  appendErrorMessage,
   getConversationPersistSnapshot,
   getConversationState,
   hydrateConversation,
@@ -58,7 +55,8 @@ import {
   prepareProject,
   setLocalRev,
   setSessionExpired,
-  startNewConversation
+  startNewConversation,
+  useConversationState
 } from '../state/conversationStore'
 import {
   clearProjectCache,
@@ -70,8 +68,12 @@ import {
   saveLastConversationId
 } from '../state/persistence'
 import { useViewportReporter } from '../hooks/useViewportReporter'
-import { useAgentChat } from '../hooks/useAgentChat'
 import { useClassDescriptions } from '../hooks/useClassDescriptions'
+import {
+  registerFocusHandler,
+  registerGraphHandler,
+  registerViewportFlush
+} from '../state/agentBridge'
 
 /**
  * Agent 的图 patch 没有中心标记。类关系形状天然是星形（所有边都连着中心），
@@ -123,7 +125,7 @@ const classesCache = new Map()
  *
  * 这一页的职责边界：
  *  - 它负责「选项目 → 选类 → 把图和锚点摆好」；
- *  - 它持有 AgentPanel 与 useAgentChat，因为 Agent 返回的图 patch 必须落进同一张画布；
+ *  - 对话与面板在 App 里常驻（要能在任何页面用），这一页只负责把 Agent 的回答落进画布；
  *  - 它不自己请求 Agent 的图数据 —— /classes 与 /class/relations 只服务入口预览。
  */
 export default function MemoryPage({
@@ -144,6 +146,7 @@ export default function MemoryPage({
   onOpenCode,
   onOpenLogin,
   onGoProjects,
+  onOpenPage,
   methodFocus,
   onClearMethodFocus
 }) {
@@ -165,15 +168,6 @@ export default function MemoryPage({
     []
   )
   const [fitSignal, setFitSignal] = useState(0)
-  // 窄屏（例如桌面应用的预览分栏）默认收起 Agent 面板，
-  // 否则 232px 侧栏 + 340px 面板会把画布挤到不可用宽度。
-  const [panelCollapsed, setPanelCollapsed] = useState(
-    () => typeof window !== 'undefined' && window.innerWidth < 900
-  )
-  const [panelWidth, setPanelWidth] = useState(() => {
-    const w = typeof window !== 'undefined' ? window.innerWidth : 1400
-    return Math.max(280, Math.min(380, Math.round(w * 0.26)))
-  })
   const [relFilters, setRelFilters] = useState({
     CALLS: true,
     EXTENDS: true,
@@ -188,7 +182,6 @@ export default function MemoryPage({
   const classesSeq = useRef(0)
   const prevClassesAnalyzingRef = useRef(analyzing)
   const prevAnalyzingRef = useRef(analyzing)
-  const [navigating, setNavigating] = useState(false)
 
   // 焦点页中心列表只在「打开/关闭/替换」时变；用字符串 key 避免平移缩放也重算模型。
   const focusCenterKey = pages.pages
@@ -247,7 +240,6 @@ export default function MemoryPage({
     selectSeq.current++
     resetPages()
     setFitSignal((n) => n + 1)
-    setNavigating(false)
     setExpandedBoxes(new Map())
 
     if (!loggedIn || !projectId) {
@@ -802,16 +794,6 @@ export default function MemoryPage({
     if (patch) setFitSignal((n) => n + 1)
   }, [executeCommands])
 
-  const getFocus = useCallback(() => {
-    if (activePage.kind === 'focus' && activePage.centerUid) {
-      return { type: 'CLASS', uid: activePage.selectedUid || activePage.centerUid }
-    }
-    return graph.focusUid ? { type: 'CLASS', uid: graph.focusUid } : null
-  }, [activePage, graph.focusUid])
-
-  // 方法锁是独立锚点：画布仍停在类上，提问时额外带上方法 uid
-  const getMethodUid = useCallback(() => methodFocus?.uid || null, [methodFocus])
-
   // 图/焦点变化后 400ms 上报整屏快照；flush 在发问前把屏幕先刷上去。
   const { flush: flushViewport } = useViewportReporter({
     projectId,
@@ -826,31 +808,20 @@ export default function MemoryPage({
     flushViewport()
   }, [pages.activeId, loggedIn, projectId, flushViewport])
 
+  // 面板常驻在所有页面，但只有这里有画布：把刷新屏幕的能力借给外层面板
+  useEffect(() => {
+    registerViewportFlush(flushViewport)
+    return () => registerViewportFlush(null)
+  }, [flushViewport])
+
   // 节点进入画布且没有描述时按需补齐；不阻塞渲染，失败了就保持无描述。
   useClassDescriptions({
     projectId,
     enabled: loggedIn && !!projectId && !analyzing
   })
 
-  const {
-    conversation,
-    send,
-    retry,
-    cancel,
-    startNew
-  } = useAgentChat({
-    projectId,
-    getFocus,
-    getMethodUid,
-    onGraph: applyAgentResponse,
-    beforeSend: flushViewport
-  })
-
-  /** 新会话：清掉「上次所在会话」，否则刷新后又把旧窗口带回来。 */
-  const handleNewConversation = useCallback(() => {
-    startNew()
-    if (projectId) saveLastConversationId(projectId, null)
-  }, [startNew, projectId])
+  // 对话本身在 App 里，这里只订阅它来保存快照、上报会话变化
+  const conversation = useConversationState()
 
   // 本地快照：图与对话各存一份，**按会话隔离**。
   // 同一个项目的两个会话不共享消息，也不共享画布快照。
@@ -896,30 +867,6 @@ export default function MemoryPage({
     }
   }, [projectId, activeCid])
 
-  /** 退回去：前端直接声明意图，后端出栈，零 LLM。 */
-  const handleBack = useCallback(async () => {
-    const cid = getConversationState().conversationId
-    if (!projectId || !cid || conversation.pending || conversation.sessionExpired || navigating) {
-      return
-    }
-    setNavigating(true)
-    try {
-      const response = await apiNavigate({ projectId, conversationId: cid, op: 'BACK' })
-      appendAgentMessage(response)
-      await applyAgentResponse(response)
-    } catch (err) {
-      appendErrorMessage(err?.message || '退回失败')
-    } finally {
-      setNavigating(false)
-    }
-  }, [projectId, conversation.pending, conversation.sessionExpired, navigating, applyAgentResponse])
-
-  const canBack =
-    !!conversation.conversationId &&
-    !conversation.pending &&
-    !conversation.sessionExpired &&
-    !navigating
-
   // citation 可能是方法级，图节点是类级：落到 owner 类上再聚焦。
   const handleCitation = useCallback((uid) => {
     const owner = ownerUid(uid)
@@ -934,21 +881,17 @@ export default function MemoryPage({
     selectClass(clazz || { qualifiedName: owner, simpleName: simpleName(owner) })
   }, [classes, selectClass, openFocusTab])
 
-  const handleClearFocus = useCallback(() => {
-    const current = getPagesState()
-    const page = current.pages.find((p) => p.id === current.activeId)
-    if (page?.kind === 'focus') {
-      setPageSelected(page.id, null)
-      return
-    }
-    setGraphFocus(null)
-    setGraphSelected(null)
-  }, [])
+  // 画布是图 patch 的唯一落点：挂载时接管，离开时交还。
+  // 离开期间 Agent 给的结果由 agentBridge 暂存，下次挂载时补上。
+  useEffect(() => {
+    registerGraphHandler(applyAgentResponse)
+    return () => registerGraphHandler(null)
+  }, [applyAgentResponse])
 
-  const handlePanelResize = useCallback((clientX) => {
-    const w = Math.min(560, Math.max(300, window.innerWidth - clientX))
-    setPanelWidth(w)
-  }, [])
+  useEffect(() => {
+    registerFocusHandler(handleCitation)
+    return () => registerFocusHandler(null)
+  }, [handleCitation])
 
   const activeFocusUid =
     activePage.kind === 'focus'
@@ -960,10 +903,21 @@ export default function MemoryPage({
   return (
     <main className="main memory-main">
       <div className="memory-left">
-        <TopBar
+        <ProjectRail
+          project={currentProject}
+          page="memory"
+          analyzing={analyzing}
+          taskProgress={taskProgress}
+          onUpload={onUpload}
+          onAnalyze={onAnalyze}
+          onOpenPage={onOpenPage}
           projects={projects}
+          onSwitchProject={onOpenProject}
+          bleed
+        />
+
+        <TopBar
           currentProject={currentProject}
-          onOpenProject={onOpenProject}
           classes={classes}
           onPickClass={handlePickClass}
           relFilters={relFilters}
@@ -1041,29 +995,6 @@ export default function MemoryPage({
           />
         </div>
       </div>
-
-      <AgentPanel
-        collapsed={panelCollapsed}
-        onToggle={() => setPanelCollapsed((v) => !v)}
-        width={panelWidth}
-        onResize={handlePanelResize}
-        projectId={projectId}
-        messages={conversation.messages}
-        pending={conversation.pending}
-        sessionExpired={conversation.sessionExpired}
-        focusLabel={focusLabel}
-        onSend={send}
-        onCancel={cancel}
-        onRetry={retry}
-        onNewConversation={handleNewConversation}
-        onBack={handleBack}
-        canBack={canBack}
-        navigating={navigating}
-        onCitation={handleCitation}
-        onClearFocus={handleClearFocus}
-        methodFocus={methodFocus}
-        onClearMethodFocus={onClearMethodFocus}
-      />
     </main>
   )
 }

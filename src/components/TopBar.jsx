@@ -22,9 +22,7 @@ const RELS = [
  * Agent 的锚点属于某个项目，页面上必须能看见「现在在看哪个项目」。
  */
 export default function TopBar({
-  projects = [],
   currentProject,
-  onOpenProject,
   classes = [],
   onPickClass,
   relFilters,
@@ -48,30 +46,6 @@ export default function TopBar({
 
   return (
     <header className="topbar">
-      <nav className="breadcrumb">
-        <span className="crumb">记忆地图</span>
-        {currentProject ? (
-          <>
-            <span className="crumb-sep">/</span>
-            <select
-              className="project-select"
-              value={currentProject.id}
-              onChange={(e) => {
-                const p = projects.find((x) => String(x.id) === e.target.value)
-                if (p) onOpenProject?.(p)
-              }}
-              title="切换项目"
-            >
-              {projects.map((p) => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
-            </select>
-          </>
-        ) : (
-          <span className="crumb-hint">先在「我的项目」里打开一个项目</span>
-        )}
-      </nav>
-
       <div className="topbar-actions">
         <ClassPicker
           classes={classes}
