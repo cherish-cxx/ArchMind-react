@@ -9,6 +9,7 @@ import DomainMapPage from './pages/DomainMapPage'
 import CodeDrawer from './components/code/CodeDrawer'
 import MemoryPage from './pages/MemoryPage'
 import AgentDock from './components/agent/AgentDock'
+import { IconSidebar } from './icons'
 import { login as apiLogin, logout as apiLogout } from './api/auth'
 import { listConversations, navigate as apiNavigate } from './api/agent'
 import {
@@ -686,7 +687,7 @@ export default function App() {
             title="展开侧栏"
             aria-label="展开侧栏"
           >
-            ›
+            <IconSidebar size={16} />
           </button>
         </div>
       )}

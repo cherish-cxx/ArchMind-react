@@ -20,6 +20,8 @@ export const IconChevronDown = (p) => <I {...p}><polyline points="6 9 12 15 18 9
 export const IconSend = (p) => <I {...p}><line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" /></I>
 export const IconBot = (p) => <I {...p}><rect x="4" y="8" width="16" height="12" rx="2" /><path d="M12 8V4" /><circle cx="12" cy="3" r="1" /><circle cx="9" cy="13" r="0.5" fill="currentColor" /><circle cx="15" cy="13" r="0.5" fill="currentColor" /><path d="M9 17h6" /></I>
 export const IconPanelHide = (p) => <I {...p}><rect x="3" y="4" width="18" height="16" rx="2" /><line x1="15" y1="4" x2="15" y2="20" /><polyline points="18 10 20 12 18 14" /></I>
+export const IconSidebar = (p) => <I {...p}><rect x="3" y="4" width="18" height="16" rx="2" /><line x1="9" y1="4" x2="9" y2="20" /></I>
+export const IconCompose = (p) => <I {...p}><path d="M11 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-5" /><path d="M18.4 2.6a2 2 0 0 1 2.8 2.8L12 14.6 8 15.6l1-4z" /></I>
 export const IconPanelShow = (p) => <I {...p}><rect x="3" y="4" width="18" height="16" rx="2" /><line x1="15" y1="4" x2="15" y2="20" /><polyline points="11 10 9 12 11 14" /></I>
 export const IconMessage = (p) => <I {...p}><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></I>
 export const IconRefresh = (p) => <I {...p}><polyline points="1 4 1 10 7 10" /><path d="M3.5 15a9 9 0 1 0 2.1-9.4L1 10" /></I>

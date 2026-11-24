@@ -5,7 +5,7 @@ import {
   IconBot,
   IconPanelHide,
   IconPanelShow,
-  IconRefresh,
+  IconCompose,
   IconArrowLeft
 } from '../../icons'
 
@@ -197,11 +197,20 @@ export default function AgentPanel({
   const [input, setInput] = useState('')
   const [elapsed, setElapsed] = useState(0)
   const listRef = useRef(null)
+  const inputRef = useRef(null)
   const resizeRef = useRef(null)
 
   useEffect(() => {
     if (listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight
   }, [messages, pending])
+
+  // 输入框跟随内容长高，最多 120px，超出后内部滚动
+  useEffect(() => {
+    const el = inputRef.current
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = `${Math.min(el.scrollHeight, 120)}px`
+  }, [input])
 
   useEffect(() => {
     if (!pending) {
@@ -273,6 +282,17 @@ export default function AgentPanel({
           />
         </div>
         <div className="ai-header-actions">
+          {projectId && (
+            <button
+              type="button"
+              className="btn-new-chat"
+              onClick={onNewConversation}
+              title="开始新对话（保留当前图）"
+            >
+              <IconCompose size={14} />
+              <span>新对话</span>
+            </button>
+          )}
           <button
             className="icon-btn"
             onClick={onBack}
@@ -281,11 +301,6 @@ export default function AgentPanel({
           >
             <IconArrowLeft size={15} />
           </button>
-          {projectId && (
-            <button className="icon-btn" onClick={onNewConversation} title="开始新对话（保留当前图）">
-              <IconRefresh size={15} />
-            </button>
-          )}
           <button className="icon-btn" onClick={onToggle} title="隐藏面板">
             <IconPanelHide size={16} />
           </button>
@@ -300,34 +315,6 @@ export default function AgentPanel({
       )}
 
       <div className="ai-messages" ref={listRef}>
-        {messages.length === 0 && (
-          <>
-            <div className="msg agent">
-              <div className="msg-content">
-                <div className="msg-text msg-intro">
-                  我是 ArchMind Agent。先在图上点一个类作为锚点，再问我它的调用链、调用方或实现。
-                  {!projectId && '（先从左侧打开一个项目。）'}
-                </div>
-              </div>
-            </div>
-            {projectId && (
-              <div className="quick-actions">
-                <button className="btn-quick" onClick={() => onSend?.('这个项目是干嘛的')}>
-                  这个项目是干嘛的
-                </button>
-                <button
-                  className="btn-quick"
-                  disabled={!focusLabel}
-                  title={focusLabel ? '' : '先在图上点一个类'}
-                  onClick={() => onSend?.('它的调用链是什么样的')}
-                >
-                  它的调用链是什么样的
-                </button>
-              </div>
-            )}
-          </>
-        )}
-
         {messages.map((m, i) => (
           <AgentMessage
             key={m.id || i}
@@ -371,21 +358,12 @@ export default function AgentPanel({
             <button className="anchor-clear" onClick={onClearMethodFocus} title="取消方法锁定">×</button>
           </div>
         )}
-        <div className="input-row">
+        <div className={`input-row${!projectId || sessionExpired || pending ? ' is-disabled' : ''}`}>
           <textarea
-            rows={2}
+            ref={inputRef}
+            rows={1}
             value={input}
-            placeholder={
-              !projectId
-                ? '先选择一个项目'
-                : sessionExpired
-                  ? '对话已过期，请开始新对话'
-                  : methodFocus
-                  ? `问问 ${methodFocus.name || shortUid(methodFocus.uid)}…`
-                  : focusLabel
-                    ? `问问 ${focusLabel}…`
-                    : '先点一个类，或问「这个项目是干嘛的」'
-            }
+            aria-label="向 ArchMind Agent 提问"
             disabled={!projectId || sessionExpired || pending}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {
@@ -398,9 +376,6 @@ export default function AgentPanel({
           <button className="btn-send" onClick={send} disabled={!canSend} title="发送">
             <IconSend size={15} />
           </button>
-        </div>
-        <div className="input-hint">
-          {pending ? '请求进行中 · 可取消' : 'Enter 发送 · Shift + Enter 换行'}
         </div>
       </div>
     </aside>

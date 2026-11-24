@@ -141,7 +141,9 @@ export default function ConversationGroups({
               <span className="conv-group-name" title={group.projectName}>
                 {group.projectName}
               </span>
-              <span className="conv-group-count">{group.conversations.length}</span>
+              {variant === 'workbench' && (
+                <span className="conv-group-count">{group.conversations.length}</span>
+              )}
             </button>
 
             <ul className="recent-list conv-children" id={listId} hidden={isCollapsed}>
@@ -156,10 +158,12 @@ export default function ConversationGroups({
                       title={c.title}
                     >
                       <span className="conv-title">{c.title || '新会话'}</span>
-                      <span className="conv-meta">
-                        {variant === 'workbench' && c.turnCount > 0 ? `${c.turnCount} 轮 · ` : ''}
-                        {fmtRelative(c.updatedAt)}
-                      </span>
+                      {variant === 'workbench' && (
+                        <span className="conv-meta">
+                          {c.turnCount > 0 ? `${c.turnCount} 轮 · ` : ''}
+                          {fmtRelative(c.updatedAt)}
+                        </span>
+                      )}
                     </button>
                   </li>
                 )

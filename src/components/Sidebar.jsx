@@ -5,7 +5,7 @@ import { groupConversations } from '../utils/conversationGroups'
 import ConversationGroups from './conversations/ConversationGroups'
 import {
   IconDashboard, IconMap, IconTerritory, IconFolder, IconChevronDown, IconPlus,
-  IconSun, IconMoon
+  IconSidebar, IconSun, IconMoon
 } from '../icons'
 
 const NAV = [
@@ -52,7 +52,7 @@ export default function Sidebar({
           title={collapsed ? '展开侧栏' : '收起侧栏'}
           aria-label={collapsed ? '展开侧栏' : '收起侧栏'}
         >
-          <IconChevronDown size={14} />
+          <IconSidebar size={16} />
         </button>
       </div>
 
