@@ -90,6 +90,37 @@
 }
 .dmap-project:hover { border-color: var(--measure-border); }
 
+/* 视图切换：业务版图 / 架构分层（只在一级页出现） */
+.dmap-tabs {
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  margin-top: 0;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--rule-soft);
+}
+.dmap-tab {
+  margin-bottom: -1px;
+  padding: 6px 10px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--ink-3);
+  font: inherit;
+  font-size: 12.5px;
+  line-height: 1.4;
+  cursor: pointer;
+  transition: color 0.14s ease, border-color 0.14s ease;
+}
+.dmap-tab:hover { color: var(--ink-1); }
+.dmap-tab.is-active {
+  color: var(--ink-1);
+  border-bottom-color: var(--measure);
+  font-weight: 500;
+}
+.dmap-tab:focus-visible { outline: 2px solid var(--measure); outline-offset: 1px; }
+.dmap-tabpanel { width: 100%; }
+
 /* 版图 */
 .dmap-map {
   position: relative;
@@ -461,5 +492,5 @@
   .dmap-chain-note { gap: 8px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .dmap-cell, .dmap-cap, .dmap-node, .dmap-progress-bar { transition: none !important; }
+  .dmap-cell, .dmap-cap, .dmap-node, .dmap-tab, .dmap-progress-bar { transition: none !important; }
 }

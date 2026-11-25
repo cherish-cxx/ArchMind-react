@@ -1,8 +1,13 @@
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react'
-import { capability as fetchCapability, domainMap as fetchDomainMap } from '../api/domain'
+import {
+  architectureLayers as fetchArchitectureLayers,
+  capability as fetchCapability,
+  domainMap as fetchDomainMap
+} from '../api/domain'
 import DomainMap from '../components/domain/DomainMap'
 import CapabilityGrid from '../components/domain/CapabilityGrid'
 import ChainGraph from '../components/domain/ChainGraph'
+import LayerBands from '../components/architecture/LayerBands'
 import ProjectRail from '../components/ProjectRail'
 import { capabilityLabel, parseCapability, splitAreas, totals } from '../utils/domain'
 import { stageLabel } from '../statusMeta'
@@ -57,9 +62,12 @@ export default function DomainMapPage({
   const [loadError, setLoadError] = useState('')
   const [stack, setStack] = useState([BASE_CRUMB])
   const [detail, setDetail] = useState({ status: 'idle', data: null, error: '' })
+  const [viewMode, setViewMode] = useState('map')
+  const [layerData, setLayerData] = useState({ status: 'idle', data: null, error: '' })
 
   const mapSeq = useRef(0)
   const detailSeq = useRef(0)
+  const layerSeq = useRef(0)
   const cacheRef = useRef(new Map())
   const prevAnalyzing = useRef(analyzing)
 
@@ -77,6 +85,19 @@ export default function DomainMapPage({
       setLoadError(err?.message || '领域地图读取失败')
     } finally {
       if (seq === mapSeq.current) setLoading(false)
+    }
+  }, [])
+
+  const loadLayers = useCallback(async (pid) => {
+    const seq = ++layerSeq.current
+    setLayerData({ status: 'loading', data: null, error: '' })
+    try {
+      const data = await fetchArchitectureLayers(pid)
+      if (seq !== layerSeq.current) return
+      setLayerData({ status: 'ready', data, error: '' })
+    } catch (err) {
+      if (seq !== layerSeq.current) return
+      setLayerData({ status: 'error', data: null, error: err?.message || '架构分层读取失败' })
     }
   }, [])
 
@@ -106,13 +127,21 @@ export default function DomainMapPage({
   useEffect(() => {
     mapSeq.current++
     detailSeq.current++
+    layerSeq.current++
     cacheRef.current.clear()
     setStack([BASE_CRUMB])
     setDetail({ status: 'idle', data: null, error: '' })
     setAreas(null)
     setLoadError('')
+    setViewMode('map')
+    setLayerData({ status: 'idle', data: null, error: '' })
     if (loggedIn && projectId) loadMap(projectId)
   }, [loggedIn, projectId, loadMap])
+
+  // 分层视图按需取数：只在切到分层且已有项目时请求
+  useEffect(() => {
+    if (viewMode === 'layers' && projectId) loadLayers(projectId)
+  }, [viewMode, projectId, loadLayers])
 
   // 分析从进行中变为结束：领域结构可能刚生成，重新取一次
   useEffect(() => {
@@ -138,6 +167,8 @@ export default function DomainMapPage({
   }, [])
 
   const openArea = useCallback((area) => {
+    // 进入领域始终看业务视角，分层只在项目一级展示
+    setViewMode('map')
     setStack([BASE_CRUMB, { type: 'caps', area, label: area.name }])
   }, [])
 
@@ -223,6 +254,16 @@ export default function DomainMapPage({
     )
   }
 
+  const onTabKeyDown = (event) => {
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
+    event.preventDefault()
+    const next = viewMode === 'map' ? 'layers' : 'map'
+    setViewMode(next)
+    event.currentTarget.parentElement
+      ?.querySelector(`[data-view="${next}"]`)
+      ?.focus()
+  }
+
   const renderAreas = () => {
     if (loading && areas === null) return <p className="dmap-loading">正在读取领域地图…</p>
     if (loadError) {
@@ -280,7 +321,54 @@ export default function DomainMapPage({
             </select>
           )}
         </header>
-        <DomainMap areas={areas || []} onOpen={openArea} />
+        <div className="dmap-tabs" role="tablist" aria-label="项目视图">
+          <button
+            type="button"
+            role="tab"
+            id="dmap-tab-map"
+            data-view="map"
+            aria-selected={viewMode === 'map'}
+            aria-controls="dmap-tabpanel"
+            tabIndex={viewMode === 'map' ? 0 : -1}
+            className={`dmap-tab${viewMode === 'map' ? ' is-active' : ''}`}
+            onClick={() => setViewMode('map')}
+            onKeyDown={onTabKeyDown}
+          >
+            业务版图
+          </button>
+          <button
+            type="button"
+            role="tab"
+            id="dmap-tab-layers"
+            data-view="layers"
+            aria-selected={viewMode === 'layers'}
+            aria-controls="dmap-tabpanel"
+            tabIndex={viewMode === 'layers' ? 0 : -1}
+            className={`dmap-tab${viewMode === 'layers' ? ' is-active' : ''}`}
+            onClick={() => setViewMode('layers')}
+            onKeyDown={onTabKeyDown}
+          >
+            架构分层
+          </button>
+        </div>
+        <div
+          className="dmap-tabpanel"
+          id="dmap-tabpanel"
+          role="tabpanel"
+          aria-labelledby={`dmap-tab-${viewMode}`}
+        >
+          {viewMode === 'layers' ? (
+            <LayerBands
+              data={layerData.data}
+              loading={layerData.status === 'idle' || layerData.status === 'loading'}
+              error={layerData.status === 'error' ? layerData.error : ''}
+              onRetry={() => projectId && loadLayers(projectId)}
+              onOpenCode={onOpenCode}
+            />
+          ) : (
+            <DomainMap areas={areas || []} onOpen={openArea} />
+          )}
+        </div>
       </>
     )
   }
