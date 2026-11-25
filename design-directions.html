@@ -1,0 +1,1030 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>ArchMind · 四个设计方向</title>
+<style>
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: #e9ebed;
+    color: #171a1e;
+    font-family: "PingFang SC", "Microsoft YaHei", "Hiragino Sans GB",
+      -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 15px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: inherit; }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 36px 24px 88px; }
+
+  /* ---------- 文档外壳 ---------- */
+  .doc-head { padding: 8px 0 28px; border-bottom: 1px solid #ced3d7; }
+  .doc-kicker { margin: 0 0 10px; font-size: 13px; color: #5c646c; }
+  .doc-head h1 {
+    margin: 0;
+    max-width: 760px;
+    font-size: 38px;
+    line-height: 1.18;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+  }
+  .doc-lede {
+    margin: 14px 0 0;
+    max-width: 720px;
+    color: #454c54;
+    font-size: 15px;
+    line-height: 1.75;
+  }
+  .doc-nav {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin: 0 -8px;
+    padding: 10px 8px;
+    background: rgba(233, 235, 237, 0.94);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid #d6dadd;
+  }
+  .doc-nav a {
+    padding: 6px 10px;
+    border-radius: 6px;
+    color: #3d444b;
+    font-size: 13px;
+    text-decoration: none;
+  }
+  .doc-nav a:hover { background: #dfe2e5; color: #171a1e; }
+
+  /* ---------- 现状诊断 ---------- */
+  .audit {
+    margin-top: 32px;
+    padding: 24px 26px 26px;
+    border: 1px solid #cfd4d8;
+    border-radius: 14px;
+    background: #fdfdfd;
+  }
+  .audit h2 { margin: 0 0 8px; font-size: 20px; font-weight: 600; }
+  .audit > p { margin: 0; max-width: 780px; color: #4d545b; font-size: 14px; line-height: 1.7; }
+  .audit-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px 30px; margin-top: 20px; }
+  .audit-item h3 { margin: 0 0 4px; font-size: 13.5px; font-weight: 600; }
+  .audit-item p { margin: 0; color: #4d545b; font-size: 12.5px; line-height: 1.65; }
+  .audit-item code {
+    display: inline-block;
+    margin-top: 6px;
+    padding: 1px 5px;
+    border-radius: 3px;
+    background: #f1f3f4;
+    color: #6b737a;
+    font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+    font-size: 10.5px;
+  }
+
+  /* ---------- 方向外壳 ---------- */
+  .dir {
+    margin-top: 42px;
+    border: 1px solid #cfd4d8;
+    border-radius: 14px;
+    background: #fdfdfd;
+    overflow: clip;
+  }
+  .dir-head {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    padding: 22px 24px;
+    border-bottom: 1px solid #e2e5e8;
+  }
+  .dir-letter {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    flex-shrink: 0;
+    border: 1px solid #b9c0c6;
+    border-radius: 50%;
+    font-size: 14px;
+    font-weight: 700;
+  }
+  .dir-name { margin: 0; font-size: 22px; line-height: 1.3; font-weight: 600; letter-spacing: -0.01em; }
+  .dir-line { margin: 4px 0 0; max-width: 640px; color: #555d65; font-size: 14px; }
+  .dir-traits { margin-left: auto; display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+  .trait {
+    padding: 3px 8px;
+    border: 1px solid #d4d9dd;
+    border-radius: 999px;
+    color: #545c64;
+    font-size: 11.5px;
+    white-space: nowrap;
+  }
+  .dir-body { display: grid; grid-template-columns: minmax(0, 1fr) 300px; }
+  .dir-sample-pane { padding: 22px; border-right: 1px solid #e2e5e8; }
+  .dir-side { padding: 22px; }
+  .dir-side h3 {
+    margin: 0 0 10px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #5c646c;
+  }
+  .dir-side h3 + * { margin-bottom: 22px; }
+  .dir-side ul { margin: 0; padding-left: 18px; color: #454c54; font-size: 13px; line-height: 1.7; }
+  .dir-side li { margin: 3px 0; }
+
+  /* ---------- 共用样张结构（颜色由方向覆盖） ---------- */
+  .sample {
+    --paper: #f4f5f1; --surface: #fbfbf9; --canvas: #f7f8f4;
+    --ink: #1b211d; --ink2: #4e5750; --ink3: #5f6a61;
+    --rule: #c9d0c7; --accent: #b6431f; --accent-ink: #fff;
+    --measure: #2b4c7e; --ok: #2f6f4f; --warn: #8a5f0a; --bad: #a23b30;
+    --plate: #fff; --radius: 2px;
+    --mono: ui-monospace, "Cascadia Code", "SFMono-Regular", Consolas, monospace;
+    padding: 18px;
+    background: var(--paper);
+    color: var(--ink);
+    font-size: 14px;
+    line-height: 1.6;
+  }
+  .s-top { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+  .s-id { font-family: var(--mono); font-size: 12.5px; color: var(--ink2); }
+  .s-status { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink2); }
+  .s-status i { width: 6px; height: 6px; border-radius: 50%; background: var(--ok); }
+  .s-primary {
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 30px;
+    padding: 0 12px;
+    border: 1px solid var(--accent);
+    border-radius: var(--radius);
+    background: var(--accent);
+    color: var(--accent-ink);
+    font: inherit;
+    font-size: 12.5px;
+    cursor: pointer;
+  }
+  .s-body { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 0.9fr); gap: 12px; }
+  .s-canvas {
+    position: relative;
+    min-height: 250px;
+    border: 1px solid var(--rule);
+    border-radius: var(--radius);
+    background: var(--canvas);
+    overflow: hidden;
+  }
+  .s-canvas svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .s-agent {
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--rule);
+    border-radius: var(--radius);
+    background: var(--surface);
+    padding: 12px;
+    min-height: 250px;
+  }
+  .s-agent-label {
+    margin-bottom: 8px;
+    font-size: 11.5px;
+    color: var(--ink3);
+  }
+  .s-agent p { margin: 0 0 10px; font-size: 13px; line-height: 1.7; color: var(--ink); }
+  .s-agent p code {
+    padding: 0 3px;
+    font-family: var(--mono);
+    font-size: 11.5px;
+    background: color-mix(in srgb, var(--ink) 7%, transparent);
+    border-radius: 2px;
+  }
+  .s-cites { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: auto; }
+  .s-cites span {
+    padding: 2px 7px;
+    border: 1px solid var(--rule);
+    border-radius: var(--radius);
+    font-size: 11px;
+    color: var(--ink2);
+  }
+  .s-input {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px solid var(--rule);
+    font-size: 12px;
+    color: var(--ink3);
+  }
+  .s-input span { flex: 1; }
+  .s-input b {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border-radius: var(--radius);
+    background: var(--accent);
+    color: var(--accent-ink);
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .s-controls {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px solid var(--rule);
+  }
+  .s-btn {
+    height: 29px;
+    padding: 0 11px;
+    border: 1px solid var(--rule);
+    border-radius: var(--radius);
+    background: transparent;
+    color: var(--ink2);
+    font: inherit;
+    font-size: 12px;
+  }
+  .s-btn.is-fill { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  .s-tag {
+    padding: 2px 8px;
+    border: 1px solid var(--rule);
+    border-radius: var(--radius);
+    font-size: 11.5px;
+    color: var(--ink2);
+  }
+  .s-inputline { width: 150px; height: 29px; border-bottom: 1px solid var(--rule); font-size: 12px; color: var(--ink3); display: flex; align-items: center; }
+
+  /* 画布节点：共用定位，外观由方向覆盖 */
+  .node {
+    position: absolute;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 0 10px;
+    height: 34px;
+    max-width: min(150px, 42%);
+    background: var(--plate);
+    color: var(--ink);
+    border: 1px solid var(--rule);
+    border-radius: var(--radius);
+    font-size: 12px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    transform: translate(-50%, -50%);
+  }
+  .node .glyph {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 17px;
+    height: 17px;
+    flex-shrink: 0;
+    border-radius: 2px;
+    background: var(--ink);
+    color: var(--paper);
+    font-size: 9.5px;
+    font-weight: 700;
+  }
+  .node.is-interface .glyph { background: transparent; color: var(--ink); border: 1px dashed var(--ink3); }
+  .node.is-enum .glyph { background: var(--warn); color: var(--paper); }
+  .n1 { left: 18%; top: 28%; }
+  .n2 { left: 50%; top: 50%; }
+  .n3 { left: 82%; top: 28%; }
+  .n4 { left: 50%; top: 80%; }
+  .s-rel-label {
+    position: absolute;
+    transform: translate(-50%, -50%);
+    font-family: var(--mono);
+    font-size: 9px;
+    line-height: 1;
+    color: var(--ink3);
+    background: var(--canvas);
+    padding: 1px 3px;
+  }
+  .r1 { left: 32%; top: 36%; }
+  .r2 { left: 68%; top: 36%; }
+  .r3 { left: 58%; top: 66%; }
+
+  /* ---------- 色板 / 字体 ---------- */
+  .swatches { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .sw {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 8px;
+    border: 1px solid #e0e3e5;
+    border-radius: 6px;
+    background: #fff;
+    min-width: 0;
+  }
+  .sw i {
+    width: 22px;
+    height: 22px;
+    flex-shrink: 0;
+    border-radius: 4px;
+    background: var(--c, #ccc);
+    border: 1px solid rgba(0, 0, 0, 0.1);
+  }
+  .sw b { display: block; font-size: 10.5px; font-weight: 600; line-height: 1.3; color: #2c3237; }
+  .sw code { display: block; font-size: 9.5px; line-height: 1.3; color: #727a82; font-family: ui-monospace, Consolas, monospace; }
+
+  .type-spec { border: 1px solid #e0e3e5; border-radius: 6px; padding: 12px; background: #fff; }
+  .type-spec .t-title { font-size: 26px; line-height: 1.25; font-weight: 600; letter-spacing: -0.02em; }
+  .type-spec .t-body { margin-top: 8px; font-size: 13.5px; line-height: 1.7; color: #3f464c; }
+  .type-spec .t-meta { margin-top: 8px; font-size: 11.5px; color: #717981; font-variant-numeric: tabular-nums; }
+  .type-spec .t-mono { margin-top: 6px; font-family: ui-monospace, Consolas, monospace; font-size: 11px; color: #5e666e; }
+  .type-spec .t-scale { margin-top: 10px; padding-top: 8px; border-top: 1px dashed #dfe2e4; font-size: 10.5px; color: #7a8289; }
+
+  .wire {
+    display: flex;
+    gap: 5px;
+    height: 116px;
+    padding: 6px;
+    border: 1px solid #e0e3e5;
+    border-radius: 6px;
+    background: #fff;
+  }
+  .wire > div {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid #dfe2e4;
+    border-radius: 3px;
+    font-size: 9.5px;
+    color: #6b737a;
+  }
+  .wire-rail { width: 24px; flex-shrink: 0; }
+  .wire-main { flex: 1; display: flex !important; flex-direction: column; gap: 4px; align-items: stretch !important; padding: 4px; }
+  .wire-top { height: 16px; flex-shrink: 0; }
+  .wire-canvas { flex: 1; background: #f4f5f2; }
+  .wire-panel { width: 56px; flex-shrink: 0; }
+
+  button:focus-visible, a:focus-visible { outline: 2px solid #2347b8; outline-offset: 2px; }
+  .dir-b button:focus-visible, .dir-b a:focus-visible { outline-color: #e0a45c; }
+
+  /* ---------- 方向 A：测绘图 ---------- */
+  .dir-a .sample {
+    --paper: #f4f5f1; --surface: #fbfbf9; --canvas: #f7f8f4;
+    --ink: #1b211d; --ink2: #4e5750; --ink3: #5f6a61;
+    --rule: #c9d0c7; --accent: #b6431f; --accent-ink: #fff;
+    --measure: #2b4c7e; --ok: #2f6f4f; --warn: #8a5f0a; --bad: #a23b30;
+    --plate: #fdfdfa; --radius: 2px;
+  }
+  .dir-a .s-canvas {
+    background-image:
+      linear-gradient(#dfe4dd 1px, transparent 1px),
+      linear-gradient(90deg, #dfe4dd 1px, transparent 1px);
+    background-size: 22px 22px;
+  }
+  .dir-a .node { border-color: #8d9a90; }
+  .dir-a .node.is-selected {
+    border-color: var(--measure);
+    box-shadow: inset 0 0 0 3px #f7f8f4, 0 0 0 1px var(--measure);
+  }
+  .dir-a .s-primary { border-radius: 2px; background: var(--accent); border-color: var(--accent); }
+  .dir-a .s-cites span { border-radius: 2px; border-color: #b7c0b8; background: #fbfbf8; }
+  .dir-a .s-agent { box-shadow: none; }
+  .dir-a .s-agent-label { font-family: var(--mono); }
+  .dir-a .s-tag { border-radius: 2px; }
+  .dir-a .type-spec .t-title, .dir-a .dir-name { font-family: "IBM Plex Sans", "PingFang SC", "Microsoft YaHei", sans-serif; }
+
+  /* ---------- 方向 B：夜航图 ---------- */
+  .dir-b { background: #0f1620; border-color: #243040; }
+  .dir-b .dir-head { border-bottom-color: #243040; }
+  .dir-b .dir-letter { border-color: #3a4a5e; color: #dce5ef; }
+  .dir-b .dir-name { color: #e7edf5; }
+  .dir-b .dir-line { color: #9fb0c3; }
+  .dir-b .trait { border-color: #314054; color: #9fb0c3; }
+  .dir-b .dir-sample-pane { border-right-color: #243040; }
+  .dir-b .dir-side h3 { color: #8294a9; }
+  .dir-b .dir-side ul { color: #b7c3d2; }
+  .dir-b .sw { background: #141e2a; border-color: #26374a; }
+  .dir-b .sw b { color: #dce5ef; }
+  .dir-b .sw code { color: #8294a9; }
+  .dir-b .type-spec { background: #141e2a; border-color: #26374a; }
+  .dir-b .type-spec .t-title { color: #e7edf5; }
+  .dir-b .type-spec .t-body { color: #b7c3d2; }
+  .dir-b .type-spec .t-meta { color: #8294a9; }
+  .dir-b .type-spec .t-mono { color: #9fb0c3; }
+  .dir-b .type-spec .t-scale { border-top-color: #26374a; color: #74879b; }
+  .dir-b .wire { background: #141e2a; border-color: #26374a; }
+  .dir-b .wire > div { border-color: #2b3c50; color: #8294a9; }
+  .dir-b .wire-canvas { background: #0b121a; }
+  .dir-b .sample {
+    --paper: #0c131b; --surface: #121c27; --canvas: #0a1118;
+    --ink: #e7edf5; --ink2: #b7c3d2; --ink3: #9fb0c3;
+    --rule: #26374a; --accent: #e0a45c; --accent-ink: #0c131b;
+    --measure: #6fc9c2; --ok: #62b98c; --warn: #e0a45c; --bad: #d96c7a;
+    --plate: #1a2736; --radius: 6px;
+  }
+  .dir-b .s-canvas {
+    background-image: radial-gradient(rgba(159, 176, 195, 0.18) 1px, transparent 1px);
+    background-size: 26px 26px;
+  }
+  .dir-b .node { border-color: #314054; }
+  .dir-b .node:not(.is-selected) { opacity: 0.5; }
+  .dir-b .node.is-selected {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px rgba(224, 164, 92, 0.35), 0 0 18px rgba(224, 164, 92, 0.12);
+  }
+  .dir-b .node .glyph { background: #24344a; color: #dce5ef; }
+  .dir-b .node.is-interface .glyph { background: transparent; color: var(--ink); border: 1px dashed var(--ink3); }
+  .dir-b .node.is-enum .glyph { background: var(--warn); color: var(--paper); }
+  .dir-b .s-primary { background: var(--accent); border-color: var(--accent); }
+  .dir-b .s-cites span { border-color: #314054; color: #9fb0c3; }
+  .dir-b .s-input b { color: #0c131b; }
+  .dir-b .s-agent p code { background: rgba(255, 255, 255, 0.07); }
+  .dir-b .s-rel { fill: #6f8298; }
+
+  /* ---------- 方向 C：批注 ---------- */
+  .dir-c .sample {
+    --paper: #ffffff; --surface: #ffffff; --canvas: #ffffff;
+    --ink: #141715; --ink2: #3f4642; --ink3: #616b64;
+    --rule: #dde1dc; --accent: #141715; --accent-ink: #fff;
+    --measure: #2347b8; --ok: #2c7a57; --warn: #94660c; --bad: #b3261e;
+    --plate: #fff; --radius: 4px;
+  }
+  .dir-c .s-canvas {
+    background-image: repeating-linear-gradient(
+      180deg, transparent 0, transparent 31px, #eef0ec 31px, #eef0ec 32px
+    );
+  }
+  .dir-c .node {
+    height: auto;
+    padding: 3px 4px;
+    border: 0;
+    background: transparent;
+    border-radius: 2px;
+    gap: 6px;
+  }
+  .dir-c .node .glyph { width: 7px; height: 7px; border-radius: 50%; background: var(--ink3); color: transparent; }
+  .dir-c .node.is-interface .glyph { background: transparent; border: 1px solid var(--ink3); }
+  .dir-c .node.is-enum .glyph { background: var(--warn); }
+  .dir-c .node.is-selected {
+    background: #f8e9a8;
+    box-shadow: 0 0 0 3px #f8e9a8;
+  }
+  .dir-c .s-primary { background: var(--ink); border-color: var(--ink); color: #fff; }
+  .dir-c .s-agent { border-left: 2px solid var(--ink); border-top: 0; border-right: 0; border-bottom: 0; padding-left: 14px; }
+  .dir-c .s-agent p { font-size: 14px; line-height: 1.8; }
+  .dir-c .s-agent p code { background: #f1f2ef; }
+  .dir-c .s-cites span {
+    border: 0;
+    border-bottom: 1px solid #cfd4ce;
+    border-radius: 0;
+    padding: 0 2px;
+  }
+  .dir-c sup.mark {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 15px;
+    height: 15px;
+    margin: 0 1px;
+    padding: 0 3px;
+    border-radius: 2px;
+    background: #f1c84b;
+    color: #141715;
+    font-size: 9px;
+    font-weight: 700;
+    line-height: 1;
+  }
+  .dir-c .s-tag { border: 0; border-bottom: 1px solid #cfd4ce; border-radius: 0; padding: 0 2px; }
+  .dir-c .node { font-size: 12.5px; }
+
+  /* ---------- 方向 D：静默仪器 ---------- */
+  .dir-d .sample {
+    --paper: #fafbfc; --surface: #ffffff; --canvas: #ffffff;
+    --ink: #161a20; --ink2: #3e4652; --ink3: #5c6675;
+    --rule: #e3e7ee; --accent: #2d4fe0; --accent-ink: #fff;
+    --measure: #2d4fe0; --ok: #12805c; --warn: #9a6700; --bad: #b42318;
+    --plate: #ffffff; --radius: 8px;
+  }
+  .dir-d .s-canvas {
+    background-image: radial-gradient(#e4e8ee 1px, transparent 1px);
+    background-size: 20px 20px;
+  }
+  .dir-d .node { box-shadow: 0 1px 2px rgba(22, 26, 32, 0.05); }
+  .dir-d .node.is-selected {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(45, 79, 224, 0.12);
+  }
+  .dir-d .s-primary { background: var(--accent); border-color: var(--accent); }
+  .dir-d .s-cites span { background: #f5f7fb; border-color: #e3e7ee; }
+  .dir-d .s-agent { box-shadow: 0 1px 2px rgba(22, 26, 32, 0.04); }
+
+  /* ---------- 对比表 ---------- */
+  .compare { margin-top: 52px; }
+  .compare h2 { margin: 0 0 14px; font-size: 20px; font-weight: 600; }
+  table { width: 100%; border-collapse: collapse; background: #fdfdfd; border: 1px solid #cfd4d8; }
+  th, td { padding: 11px 14px; border-bottom: 1px solid #e2e5e8; text-align: left; vertical-align: top; font-size: 13px; }
+  th { font-weight: 600; color: #3d444b; background: #f4f5f6; }
+  tr:last-child td { border-bottom: 0; }
+  td b { font-weight: 600; }
+
+  /* ---------- 地基 ---------- */
+  .foundation { margin-top: 44px; padding: 26px 28px; border: 1px solid #cfd4d8; border-radius: 14px; background: #fdfdfd; }
+  .foundation h2 { margin: 0 0 8px; font-size: 20px; font-weight: 600; }
+  .foundation > p { margin: 0 0 20px; max-width: 760px; color: #4d545b; font-size: 14px; line-height: 1.7; }
+  .foundation-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; }
+  .foundation-grid h3 { margin: 0 0 6px; font-size: 13px; font-weight: 600; }
+  .foundation-grid p { margin: 0; color: #555d65; font-size: 12.5px; line-height: 1.65; }
+  .doc-foot { margin-top: 36px; padding-top: 16px; border-top: 1px solid #d0d5d9; color: #6b737a; font-size: 12px; }
+
+  @media (max-width: 900px) {
+    .doc-head h1 { font-size: 30px; }
+    .audit-grid { grid-template-columns: 1fr; }
+    .dir-body { grid-template-columns: 1fr; }
+    .dir-sample-pane { border-right: 0; border-bottom: 1px solid #e2e5e8; }
+    .s-body { grid-template-columns: 1fr; }
+    .s-canvas { min-height: 230px; }
+    .foundation-grid { grid-template-columns: 1fr 1fr; }
+  }
+  @media (max-width: 560px) {
+    .wrap { padding: 24px 14px 64px; }
+    .dir-head { flex-wrap: wrap; }
+    .dir-traits { margin-left: 50px; justify-content: flex-start; }
+    .node { max-width: 34%; padding: 0 7px; font-size: 11px; }
+    .foundation-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="doc-head">
+    <p class="doc-kicker">ArchMind 前端设计 · 方向样张</p>
+    <h1>四种视觉语言，共用一个产品骨架</h1>
+    <p class="doc-lede">
+      当前界面的信息架构是清楚的：状态对应下一步动作、继续上次、会话按项目分组、画布与对话同屏。
+      需要换掉的是视觉语言：主色、字阶、圆角、阴影、卡片层级，以及画布上过多的编码。
+      下面四个方向都能承接现有功能，但气质、阅读负担和维护成本不同。
+    </p>
+  </header>
+
+  <nav class="doc-nav" aria-label="方向导航">
+    <a href="#audit">现状</a>
+    <a href="#a">A · 测绘图</a>
+    <a href="#b">B · 夜航图</a>
+    <a href="#c">C · 批注</a>
+    <a href="#d">D · 静默仪器</a>
+    <a href="#compare">对比</a>
+    <a href="#foundation">共同地基</a>
+  </nav>
+
+  <!-- ================= 现状 ================= -->
+  <section class="audit" id="audit">
+    <h2>现状：不是“不好看”，是系统没有建立</h2>
+    <p>
+      信息架构是清楚的，问题集中在视觉层。下面这些不是审美偏好，而是会直接影响可读性、修改成本和新组件一致性的结构性问题。
+    </p>
+    <div class="audit-grid">
+      <div class="audit-item">
+        <h3>主色没有语义</h3>
+        <p>主色靛蓝、画布选中蓝、接口绿、枚举琥珀、依赖紫各用一套；图和界面不像同一个系统。</p>
+        <code>styles.css:3–8 · 1442–1444 · 1553–1585</code>
+      </div>
+      <div class="audit-item">
+        <h3>字阶碎片化</h3>
+        <p>17 种字号；10–11.5px 出现 68 次；正文 13px。Windows 上雅黑在这个尺寸会发虚。</p>
+        <code>styles.css · font-size 统计</code>
+      </div>
+      <div class="audit-item">
+        <h3>对比度不足</h3>
+        <p>text-3 约 3.0:1，text-4 约 1.8:1，深色 text-4 约 3.4:1；待分析状态约 4.36:1，都低于正文 4.5:1。</p>
+        <code>styles.css:11–19 · 902–907 · 2154–2167</code>
+      </div>
+      <div class="audit-item">
+        <h3>形状与层级没有系统</h3>
+        <p>圆角从 3 到 12 再到 999；tag、chip、status-pill、citation-chip、suggestion-chip 五种胶囊；`page-title` 根本没有样式。</p>
+        <code>styles.css:97–105 · 888–907 · 1198 · 1841 · 1893 · ProjectList.jsx:39</code>
+      </div>
+      <div class="audit-item">
+        <h3>深色主题是补丁层</h3>
+        <p>163 行逐选择器覆盖，59 处硬编码白色；新增组件很容易在深色下漏掉。</p>
+        <code>styles.css:2145–2308</code>
+      </div>
+      <div class="audit-item">
+        <h3>画布编码过载</h3>
+        <p>节点同时用边框样式、底色、字形、左侧色条；关系又用四种线型与颜色。看一眼要解码太多信号。</p>
+        <code>styles.css:1552–1585</code>
+      </div>
+      <div class="audit-item">
+        <h3>页面 chrome 过重</h3>
+        <p>记忆地图上顶栏 52、概况栏、标签 34、状态条 34；画布是核心，却拿不到最大的连续空间。</p>
+        <code>MemoryPage.jsx:960–1042</code>
+      </div>
+      <div class="audit-item">
+        <h3>首屏不展示“作品”</h3>
+        <p>工作台先给问候语，继续上次在下面；画布空态是一张浮在点阵上的卡片，而不是地图本身。</p>
+        <code>Workbench.jsx:88–141 · GraphEmptyState.jsx</code>
+      </div>
+      <div class="audit-item">
+        <h3>动效与焦点没有统一</h3>
+        <p>reduced-motion 只覆盖一处；焦点样式各写各的，部分输入框只换边框颜色。</p>
+        <code>styles.css:345–347 · 483–495 · 690–704</code>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= A ================= -->
+  <section class="dir dir-a" id="a">
+    <header class="dir-head">
+      <span class="dir-letter">A</span>
+      <div>
+        <h2 class="dir-name">测绘图</h2>
+        <p class="dir-line">把代码结构当成一张工程图：冷纸、墨线、测绘橙，画布是图纸，界面是标注层。</p>
+      </div>
+      <div class="dir-traits">
+        <span class="trait">浅色</span>
+        <span class="trait">理性 / 技术</span>
+        <span class="trait">中高密度</span>
+      </div>
+    </header>
+    <div class="dir-body">
+      <div class="dir-sample-pane">
+        <div class="sample">
+          <div class="s-top">
+            <span class="s-id">order-service</span>
+            <span class="s-status"><i></i>已分析</span>
+            <button class="s-primary">继续探索</button>
+          </div>
+          <div class="s-body">
+            <div class="s-canvas">
+              <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+                <line x1="18" y1="28" x2="50" y2="50" stroke="#8d9a90" stroke-width="1" vector-effect="non-scaling-stroke" />
+                <line x1="50" y1="50" x2="82" y2="28" stroke="#8d9a90" stroke-width="1" vector-effect="non-scaling-stroke" />
+                <line x1="50" y1="50" x2="50" y2="80" stroke="#8d9a90" stroke-width="1" stroke-dasharray="4 3" vector-effect="non-scaling-stroke" />
+              </svg>
+              <span class="s-rel-label r1">CALLS</span>
+              <span class="s-rel-label r2">CALLS</span>
+              <span class="s-rel-label r3">DEPENDS</span>
+              <div class="node n1"><span class="glyph">C</span>OrderController</div>
+              <div class="node n2 is-selected"><span class="glyph">C</span>OrderService</div>
+              <div class="node n3 is-interface"><span class="glyph">I</span>OrderRepository</div>
+              <div class="node n4"><span class="glyph">E</span>OrderStatus</div>
+            </div>
+            <div class="s-agent">
+              <div class="s-agent-label">exploration / 03</div>
+              <p><code>OrderServiceImpl</code> 依赖 <code>OrderRepository</code> 与 <code>InventoryClient</code>；库存扣减发生在 <code>createOrder</code> 的第 3 步。</p>
+              <div class="s-cites"><span>OrderRepository</span><span>InventoryClient</span></div>
+              <div class="s-input"><span>问这个类…</span><b>→</b></div>
+            </div>
+          </div>
+          <div class="s-controls">
+            <button class="s-btn is-fill">上传源码</button>
+            <button class="s-btn">重新分析</button>
+            <span class="s-tag">Spring Boot</span>
+            <span class="s-tag">24 个类</span>
+            <span class="s-inputline">搜索类名</span>
+          </div>
+        </div>
+      </div>
+      <aside class="dir-side">
+        <h3>核心色</h3>
+        <div class="swatches">
+          <div class="sw"><i style="--c:#F4F5F1"></i><span><b>paper</b><code>#F4F5F1</code></span></div>
+          <div class="sw"><i style="--c:#1B211D"></i><span><b>ink</b><code>#1B211D</code></span></div>
+          <div class="sw"><i style="--c:#C9D0C7"></i><span><b>rule</b><code>#C9D0C7</code></span></div>
+          <div class="sw"><i style="--c:#B6431F"></i><span><b>signal</b><code>#B6431F</code></span></div>
+          <div class="sw"><i style="--c:#2B4C7E"></i><span><b>measure</b><code>#2B4C7E</code></span></div>
+          <div class="sw"><i style="--c:#FBFBF9"></i><span><b>sheet</b><code>#FBFBF9</code></span></div>
+        </div>
+        <h3>字体</h3>
+        <div class="type-spec">
+          <div class="t-title">订单服务</div>
+          <div class="t-body">从类开始，沿着调用关系读结构。每个节点只回答两个问题：它是什么，它和谁相连。</div>
+          <div class="t-meta">24 个类 · 18 条关系 · 3 个断点</div>
+          <div class="t-mono">OrderServiceImpl#createOrder</div>
+          <div class="t-scale">拉丁显示 / IBM Plex Sans · 代码 / Plex Mono · 中文回退系统无衬线</div>
+        </div>
+        <h3>结构动作</h3>
+        <ul>
+          <li>侧栏收成 56px 图标轨，导航让位给画布。</li>
+          <li>项目信息变成画布右下角的图签，不再常驻一条横栏。</li>
+          <li>关系文字直接写在连线上，减少图例。</li>
+          <li>圆角 2px，无阴影；浮层才允许投影。</li>
+        </ul>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ================= B ================= -->
+  <section class="dir dir-b" id="b">
+    <header class="dir-head">
+      <span class="dir-letter">B</span>
+      <div>
+        <h2 class="dir-name">夜航图</h2>
+        <p class="dir-line">记忆是一张夜航星图：深墨蓝的画布，星光的字，琥珀色标记当前航线。</p>
+      </div>
+      <div class="dir-traits">
+        <span class="trait">深色优先</span>
+        <span class="trait">沉浸 / 空间感</span>
+        <span class="trait">低密度</span>
+      </div>
+    </header>
+    <div class="dir-body">
+      <div class="dir-sample-pane">
+        <div class="sample">
+          <div class="s-top">
+            <span class="s-id">order-service</span>
+            <span class="s-status"><i></i>已分析</span>
+            <button class="s-primary">继续探索</button>
+          </div>
+          <div class="s-body">
+            <div class="s-canvas">
+              <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+                <line x1="18" y1="28" x2="50" y2="50" stroke="#3b5169" stroke-width="1" vector-effect="non-scaling-stroke" />
+                <line x1="50" y1="50" x2="82" y2="28" stroke="#6fc9c2" stroke-width="1.4" vector-effect="non-scaling-stroke" />
+                <line x1="50" y1="50" x2="50" y2="80" stroke="#3b5169" stroke-width="1" stroke-dasharray="4 4" vector-effect="non-scaling-stroke" />
+              </svg>
+              <span class="s-rel-label r1">calls</span>
+              <span class="s-rel-label r2">calls</span>
+              <div class="node n1"><span class="glyph">C</span>OrderController</div>
+              <div class="node n2 is-selected"><span class="glyph">C</span>OrderService</div>
+              <div class="node n3 is-interface"><span class="glyph">I</span>OrderRepository</div>
+              <div class="node n4"><span class="glyph">E</span>OrderStatus</div>
+            </div>
+            <div class="s-agent">
+              <div class="s-agent-label">本次航迹</div>
+              <p><code>OrderServiceImpl</code> 依赖 <code>OrderRepository</code> 与 <code>InventoryClient</code>；库存扣减发生在 <code>createOrder</code> 的第 3 步。</p>
+              <div class="s-cites"><span>OrderRepository</span><span>InventoryClient</span></div>
+              <div class="s-input"><span>问这个类…</span><b>→</b></div>
+            </div>
+          </div>
+          <div class="s-controls">
+            <button class="s-btn is-fill">上传源码</button>
+            <button class="s-btn">重新分析</button>
+            <span class="s-tag">Spring Boot</span>
+            <span class="s-tag">24 个类</span>
+            <span class="s-inputline">搜索类名</span>
+          </div>
+        </div>
+      </div>
+      <aside class="dir-side">
+        <h3>核心色</h3>
+        <div class="swatches">
+          <div class="sw"><i style="--c:#0C131B"></i><span><b>void</b><code>#0C131B</code></span></div>
+          <div class="sw"><i style="--c:#121C27"></i><span><b>deck</b><code>#121C27</code></span></div>
+          <div class="sw"><i style="--c:#1A2736"></i><span><b>plate</b><code>#1A2736</code></span></div>
+          <div class="sw"><i style="--c:#E7EDF5"></i><span><b>star</b><code>#E7EDF5</code></span></div>
+          <div class="sw"><i style="--c:#E0A45C"></i><span><b>beacon</b><code>#E0A45C</code></span></div>
+          <div class="sw"><i style="--c:#6FC9C2"></i><span><b>link</b><code>#6FC9C2</code></span></div>
+        </div>
+        <h3>字体</h3>
+        <div class="type-spec">
+          <div class="t-title">订单服务</div>
+          <div class="t-body">从类开始，沿着调用关系读结构。每个节点只回答两个问题：它是什么，它和谁相连。</div>
+          <div class="t-meta">24 个类 · 18 条关系 · 3 个断点</div>
+          <div class="t-mono">OrderServiceImpl#createOrder</div>
+          <div class="t-scale">拉丁显示 / Instrument Sans · 代码 / IBM Plex Mono · 中文回退系统无衬线</div>
+        </div>
+        <h3>结构动作</h3>
+        <ul>
+          <li>画布通到屏幕边缘，顶栏与侧栏变成悬浮的暗色条。</li>
+          <li>焦点节点亮，1 跳邻居保留，其余降到 35% 透明度。</li>
+          <li>只有当前路径使用青色，其余关系保持低对比。</li>
+          <li>对话面板可覆盖在画布上，宽屏再并排。</li>
+        </ul>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ================= C ================= -->
+  <section class="dir dir-c" id="c">
+    <header class="dir-head">
+      <span class="dir-letter">C</span>
+      <div>
+        <h2 class="dir-name">批注</h2>
+        <p class="dir-line">把讲解当成正文，把画布当成页边批注：白纸、墨字、荧光标记，引用就是文中的上标。</p>
+      </div>
+      <div class="dir-traits">
+        <span class="trait">浅色</span>
+        <span class="trait">阅读优先</span>
+        <span class="trait">低密度</span>
+      </div>
+    </header>
+    <div class="dir-body">
+      <div class="dir-sample-pane">
+        <div class="sample">
+          <div class="s-top">
+            <span class="s-id">order-service</span>
+            <span class="s-status"><i></i>已分析</span>
+            <button class="s-primary">继续探索</button>
+          </div>
+          <div class="s-body">
+            <div class="s-canvas">
+              <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+                <line x1="18" y1="28" x2="50" y2="50" stroke="#cfd4ce" stroke-width="1" vector-effect="non-scaling-stroke" />
+                <line x1="50" y1="50" x2="82" y2="28" stroke="#cfd4ce" stroke-width="1" vector-effect="non-scaling-stroke" />
+                <line x1="50" y1="50" x2="50" y2="80" stroke="#cfd4ce" stroke-width="1" stroke-dasharray="3 3" vector-effect="non-scaling-stroke" />
+              </svg>
+              <span class="s-rel-label r1">calls</span>
+              <span class="s-rel-label r2">calls</span>
+              <div class="node n1"><span class="glyph"></span>OrderController</div>
+              <div class="node n2 is-selected"><span class="glyph"></span>OrderService</div>
+              <div class="node n3 is-interface"><span class="glyph"></span>OrderRepository</div>
+              <div class="node n4"><span class="glyph"></span>OrderStatus</div>
+            </div>
+            <div class="s-agent">
+              <div class="s-agent-label">讲解 · 第 3 轮</div>
+              <p><code>OrderServiceImpl</code> 依赖 <code>OrderRepository</code><sup class="mark">1</sup> 与 <code>InventoryClient</code><sup class="mark">2</sup>；库存扣减发生在 <code>createOrder</code> 的第 3 步。</p>
+              <div class="s-cites"><span>1 OrderRepository</span><span>2 InventoryClient</span></div>
+              <div class="s-input"><span>继续问…</span><b>→</b></div>
+            </div>
+          </div>
+          <div class="s-controls">
+            <button class="s-btn is-fill">上传源码</button>
+            <button class="s-btn">重新分析</button>
+            <span class="s-tag">Spring Boot</span>
+            <span class="s-tag">24 个类</span>
+            <span class="s-inputline">搜索类名</span>
+          </div>
+        </div>
+      </div>
+      <aside class="dir-side">
+        <h3>核心色</h3>
+        <div class="swatches">
+          <div class="sw"><i style="--c:#FFFFFF"></i><span><b>paper</b><code>#FFFFFF</code></span></div>
+          <div class="sw"><i style="--c:#141715"></i><span><b>ink</b><code>#141715</code></span></div>
+          <div class="sw"><i style="--c:#616B64"></i><span><b>gravel</b><code>#616B64</code></span></div>
+          <div class="sw"><i style="--c:#F1C84B"></i><span><b>marker</b><code>#F1C84B</code></span></div>
+          <div class="sw"><i style="--c:#DDE1DC"></i><span><b>rule</b><code>#DDE1DC</code></span></div>
+          <div class="sw"><i style="--c:#2347B8"></i><span><b>link</b><code>#2347B8</code></span></div>
+        </div>
+        <h3>字体</h3>
+        <div class="type-spec">
+          <div class="t-title">订单服务</div>
+          <div class="t-body">从类开始，沿着调用关系读结构。每个节点只回答两个问题：它是什么，它和谁相连。</div>
+          <div class="t-meta">24 个类 · 18 条关系 · 3 个断点</div>
+          <div class="t-mono">OrderServiceImpl#createOrder</div>
+          <div class="t-scale">正文 15px / 1.8 · 拉丁 / Source Sans 3 · 中文回退系统无衬线</div>
+        </div>
+        <h3>结构动作</h3>
+        <ul>
+          <li>引用变成正文里的上标，悬停时点亮画布对应节点。</li>
+          <li>对话正文加宽到 68 字符，减少侧栏式挤压。</li>
+          <li>画布弱化网格与边框，只保留节点与连线。</li>
+          <li>荧光笔是唯一强调色，状态用文字而不是胶囊。</li>
+        </ul>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ================= D ================= -->
+  <section class="dir dir-d" id="d">
+    <header class="dir-head">
+      <span class="dir-letter">D</span>
+      <div>
+        <h2 class="dir-name">静默仪器</h2>
+        <p class="dir-line">保留现有习惯，做一次彻底的产品化整理：冷白底、石墨字、单一钴蓝，去掉装饰性阴影。</p>
+      </div>
+      <div class="dir-traits">
+        <span class="trait">浅色</span>
+        <span class="trait">克制 / 通用</span>
+        <span class="trait">中密度</span>
+      </div>
+    </header>
+    <div class="dir-body">
+      <div class="dir-sample-pane">
+        <div class="sample">
+          <div class="s-top">
+            <span class="s-id">order-service</span>
+            <span class="s-status"><i></i>已分析</span>
+            <button class="s-primary">继续探索</button>
+          </div>
+          <div class="s-body">
+            <div class="s-canvas">
+              <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+                <line x1="18" y1="28" x2="50" y2="50" stroke="#c9d0da" stroke-width="1" vector-effect="non-scaling-stroke" />
+                <line x1="50" y1="50" x2="82" y2="28" stroke="#c9d0da" stroke-width="1" vector-effect="non-scaling-stroke" />
+                <line x1="50" y1="50" x2="50" y2="80" stroke="#c9d0da" stroke-width="1" stroke-dasharray="4 3" vector-effect="non-scaling-stroke" />
+              </svg>
+              <span class="s-rel-label r1">CALLS</span>
+              <span class="s-rel-label r2">CALLS</span>
+              <div class="node n1"><span class="glyph">C</span>OrderController</div>
+              <div class="node n2 is-selected"><span class="glyph">C</span>OrderService</div>
+              <div class="node n3 is-interface"><span class="glyph">I</span>OrderRepository</div>
+              <div class="node n4"><span class="glyph">E</span>OrderStatus</div>
+            </div>
+            <div class="s-agent">
+              <div class="s-agent-label">对话</div>
+              <p><code>OrderServiceImpl</code> 依赖 <code>OrderRepository</code> 与 <code>InventoryClient</code>；库存扣减发生在 <code>createOrder</code> 的第 3 步。</p>
+              <div class="s-cites"><span>OrderRepository</span><span>InventoryClient</span></div>
+              <div class="s-input"><span>问这个类…</span><b>→</b></div>
+            </div>
+          </div>
+          <div class="s-controls">
+            <button class="s-btn is-fill">上传源码</button>
+            <button class="s-btn">重新分析</button>
+            <span class="s-tag">Spring Boot</span>
+            <span class="s-tag">24 个类</span>
+            <span class="s-inputline">搜索类名</span>
+          </div>
+        </div>
+      </div>
+      <aside class="dir-side">
+        <h3>核心色</h3>
+        <div class="swatches">
+          <div class="sw"><i style="--c:#FAFBFC"></i><span><b>bg</b><code>#FAFBFC</code></span></div>
+          <div class="sw"><i style="--c:#FFFFFF"></i><span><b>surface</b><code>#FFFFFF</code></span></div>
+          <div class="sw"><i style="--c:#161A20"></i><span><b>ink</b><code>#161A20</code></span></div>
+          <div class="sw"><i style="--c:#E3E7EE"></i><span><b>line</b><code>#E3E7EE</code></span></div>
+          <div class="sw"><i style="--c:#2D4FE0"></i><span><b>accent</b><code>#2D4FE0</code></span></div>
+          <div class="sw"><i style="--c:#12805C"></i><span><b>ok</b><code>#12805C</code></span></div>
+        </div>
+        <h3>字体</h3>
+        <div class="type-spec">
+          <div class="t-title">订单服务</div>
+          <div class="t-body">从类开始，沿着调用关系读结构。每个节点只回答两个问题：它是什么，它和谁相连。</div>
+          <div class="t-meta">24 个类 · 18 条关系 · 3 个断点</div>
+          <div class="t-mono">OrderServiceImpl#createOrder</div>
+          <div class="t-scale">正文 14px / 1.65 · 拉丁 / Inter · 中文回退系统无衬线</div>
+        </div>
+        <h3>结构动作</h3>
+        <ul>
+          <li>保留现有三栏结构，只合并顶部两条信息栏。</li>
+          <li>统一 8px 圆角与一种阴影，只用于浮层。</li>
+          <li>状态色是界面里唯一允许的彩色。</li>
+          <li>改动最小，适合先做一版稳定升级。</li>
+        </ul>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ================= 对比 ================= -->
+  <section class="compare" id="compare">
+    <h2>怎么选</h2>
+    <table>
+      <thead>
+        <tr><th>方向</th><th>气质</th><th>最适合</th><th>代价</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><b>A 测绘图</b></td>
+          <td>冷静、精确、像工具</td>
+          <td>让画布成为绝对主角；代码架构产品的辨识度最高</td>
+          <td>偏冷；画布节点与连线需要重新打磨，否则会显得简陋</td>
+        </tr>
+        <tr>
+          <td><b>B 夜航图</b></td>
+          <td>沉浸、空间感、有记忆点</td>
+          <td>演示与长时间看图；暗色环境；想让产品“看起来不一样”</td>
+          <td>中文长文在深色底上更累；需要额外设计一套日光模式</td>
+        </tr>
+        <tr>
+          <td><b>C 批注</b></td>
+          <td>安静、可读、像研究笔记</td>
+          <td>讲解与引用是核心；用户主要在读 Agent 的结论</td>
+          <td>画布会被降级为辅助；荧光色控制不好会显得廉价</td>
+        </tr>
+        <tr>
+          <td><b>D 静默仪器</b></td>
+          <td>克制、通用、产品化</td>
+          <td>先稳妥升级，不改变现有使用习惯</td>
+          <td>辨识度最低；和现在的差距最小</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- ================= 地基 ================= -->
+  <section class="foundation" id="foundation">
+    <h2>无论选哪个，都要先做的四件事</h2>
+    <p>
+      现在的问题不只是“配色不好看”，而是颜色、字号和形状没有形成系统。
+      先把地基换掉，再套方向，才不会出现“新皮肤 + 旧补丁”的混合状态。
+    </p>
+    <div class="foundation-grid">
+      <div>
+        <h3>语义色层</h3>
+        <p>把 77 个变量收敛成 surface / ink / line / accent / state / relation / kind 七组；主色不再和画布节点蓝各说各话。</p>
+      </div>
+      <div>
+        <h3>字阶与对比度</h3>
+        <p>17 种字号收敛到 6 级；10–11.5px 的说明文字升到 12px 以上；text-3、text-4 达到 4.5:1。</p>
+      </div>
+      <div>
+        <h3>形状与层级</h3>
+        <p>圆角、阴影、胶囊各保留一套；页面内元素不投影，只有浮层允许 elevation。</p>
+      </div>
+      <div>
+        <h3>深色与动效</h3>
+        <p>深色从同一套语义变量推导，不再逐选择器覆盖；全局尊重 reduced-motion，焦点环统一。</p>
+      </div>
+    </div>
+  </section>
+
+  <p class="doc-foot">
+    样张只用于比较方向，未改动应用代码。选定方向后，建议先落地 token 层 + 工作台/记忆地图两个页面，再铺到其余界面。
+  </p>
+</div>
+</body>
+</html>
