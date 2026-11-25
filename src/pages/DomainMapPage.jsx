@@ -7,7 +7,7 @@ import {
 import DomainMap from '../components/domain/DomainMap'
 import CapabilityGrid from '../components/domain/CapabilityGrid'
 import ChainGraph from '../components/domain/ChainGraph'
-import LayerBands from '../components/architecture/LayerBands'
+import ArchitectureLayers from '../components/architecture/ArchitectureLayers'
 import ProjectRail from '../components/ProjectRail'
 import { capabilityLabel, parseCapability, splitAreas, totals } from '../utils/domain'
 import { stageLabel } from '../statusMeta'
@@ -360,7 +360,7 @@ export default function DomainMapPage({
           aria-labelledby={`dmap-tab-${viewMode}`}
         >
           {viewMode === 'layers' ? (
-            <LayerBands
+            <ArchitectureLayers
               data={layerData.data}
               loading={layerData.status === 'idle' || layerData.status === 'loading'}
               error={layerData.status === 'error' ? layerData.error : ''}

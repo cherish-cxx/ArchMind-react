@@ -1,271 +1,368 @@
-/* 系统架构分层（R8）：六条固定色带 + 右侧跨层调用槽。
-   几何由组件里的常量推导，这里只负责固定尺寸与视觉，全部使用现有设计变量。 */
+/* 系统架构分层（R8）：左边分层剖面，右边层间调用矩阵。
+   全部尺寸由内容决定，不再用固定高度色带。 */
 
-.arch-view { width: 100%; }
+.arch-view { width: 100%; container-type: inline-size; }
 
-.arch-body {
+.arch-lead {
+  max-width: 76ch;
+  margin: 0 0 14px;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--ink-2);
+}
+
+.arch-sheet {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 250px;
-  align-items: start;
+  grid-template-columns: minmax(0, 1.4fr) minmax(300px, 1fr);
+  align-items: stretch;
   border: 1px solid var(--rule);
   background: var(--sheet);
 }
 
-.arch-bands { min-width: 0; }
-
-/* 一条层带：固定 132px，左标签列 + 横向滚动组盒 */
-.arch-band {
-  display: grid;
-  grid-template-columns: 120px minmax(0, 1fr);
-  align-items: stretch;
-  border-bottom: 1px solid var(--rule-soft);
-  background: var(--sheet);
+.arch-panel {
+  min-width: 0;
+  padding: 14px 16px 16px;
 }
-.arch-band.is-other {
-  background: var(--warn-soft);
-  box-shadow: inset 3px 0 0 var(--warn);
+.arch-panel-matrix {
+  border-left: 1px solid var(--rule);
+  background: var(--canvas);
 }
 
-.arch-band-label {
+.arch-panel-head {
   display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 3px;
-  padding: 0 12px 0 16px;
-  border-right: 1px solid var(--rule-soft);
-  overflow: hidden;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
 }
-.arch-band-name {
+.arch-panel-head h2 {
+  margin: 0;
   font-size: 13.5px;
   font-weight: 600;
   line-height: 1.3;
   color: var(--ink-1);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
-.arch-band-count {
-  font-size: 12px;
+.arch-panel-head p {
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--ink-3);
+  text-align: right;
+}
+
+/* ---------- 分层剖面 ---------- */
+
+.arch-stratum {
+  padding: 9px 10px 10px 12px;
+  border-top: 1px solid var(--rule-soft);
+  border-left: 3px solid var(--rule-soft);
+  transition: background-color var(--transition), border-color var(--transition);
+}
+.arch-stratum:first-child { border-top: 0; }
+.arch-stratum.is-other { border-left-color: var(--warn); }
+.arch-stratum.is-related {
+  background: var(--sheet);
+  background: color-mix(in srgb, var(--measure) 8%, var(--sheet));
+}
+.arch-stratum.is-selected {
+  border-left-color: var(--measure);
+  background: var(--measure-soft);
+}
+
+.arch-stratum-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.arch-stratum-name {
+  font-size: 13.5px;
+  font-weight: 600;
   line-height: 1.35;
+  color: var(--ink-1);
+  transition: color var(--transition);
+}
+.arch-stratum.is-other .arch-stratum-name { color: var(--warn); }
+.arch-stratum-head:hover .arch-stratum-name { color: var(--measure); }
+.arch-stratum-count {
+  font-size: 12px;
+  line-height: 1.5;
   color: var(--ink-3);
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
-.arch-band.is-other .arch-band-name { color: var(--warn); }
+.arch-stratum-share {
+  margin-left: auto;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--ink-4);
+  font-variant-numeric: tabular-nums;
+}
+.arch-stratum.is-selected .arch-stratum-share { color: var(--measure); }
 
-.arch-groups {
+.arch-stratum-body {
   display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-  height: 100%;
-  padding: 0 16px;
-  overflow-x: auto;
-  overflow-y: hidden;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 7px;
 }
-.arch-band-empty {
-  font-size: 12.5px;
+.arch-stratum-empty {
+  margin: 6px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
   color: var(--ink-4);
 }
 
-/* 组盒：固定 184×76，名称 + 类数 + 最多 3 个可点击类名 */
 .arch-group {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
-  flex: 0 0 auto;
-  padding: 5px 8px;
-  border: 1px solid var(--rule);
-  border-radius: var(--radius);
-  background: var(--canvas);
-  overflow: hidden;
-}
-.arch-group-head {
-  display: flex;
   align-items: baseline;
-  gap: 6px;
+  gap: 8px;
   min-width: 0;
 }
 .arch-group-name {
-  flex: 1;
-  min-width: 0;
-  font-size: 12px;
-  font-weight: 600;
-  line-height: 15px;
-  color: var(--ink-1);
-  overflow: hidden;
-  text-overflow: ellipsis;
+  flex: 0 0 auto;
+  min-width: 44px;
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--ink-3);
   white-space: nowrap;
 }
 .arch-group-count {
-  flex-shrink: 0;
-  font-size: 10.5px;
-  line-height: 15px;
-  color: var(--ink-3);
-  font-variant-numeric: tabular-nums;
-}
-.arch-group-more {
+  margin-left: 4px;
   font-style: normal;
   color: var(--ink-4);
+  font-variant-numeric: tabular-nums;
 }
 .arch-group-classes {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-height: 0;
-  overflow: hidden;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
 }
-.arch-class-chip {
-  display: block;
-  width: 100%;
-  height: 13px;
-  padding: 0 5px;
+
+.arch-class {
+  display: inline-block;
+  max-width: 100%;
+  height: 22px;
+  padding: 0 6px;
   border: 1px solid var(--rule-soft);
-  border-radius: 2px;
+  border-radius: var(--radius);
   background: var(--sheet);
   color: var(--ink-2);
   font-family: var(--font-mono);
-  font-size: 10.5px;
-  line-height: 11px;
-  text-align: left;
+  font-size: 11.5px;
+  line-height: 20px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   cursor: pointer;
   transition: border-color var(--transition), background-color var(--transition), color var(--transition);
 }
-.arch-class-chip:hover {
+.arch-class:hover {
   border-color: var(--measure-border);
   background: var(--measure-soft);
   color: var(--measure);
 }
-
-/* 未归类层说明：放在两列主体下方，避免拉高左列破坏与 SVG 槽的对齐 */
-.arch-other-note {
-  margin: 8px 0 0;
-  padding: 6px 12px;
-  border-left: 3px solid var(--warn);
-  border-radius: var(--radius);
-  background: var(--warn-soft);
-  color: var(--warn);
-  font-size: 12px;
-  line-height: 1.5;
+.arch-class.is-static { cursor: default; }
+.arch-class.is-static:hover {
+  border-color: var(--rule-soft);
+  background: var(--sheet);
+  color: var(--ink-2);
 }
 
-/* 右槽：一张 SVG 覆盖整列高度；每条边是一个可聚焦的按钮 */
-.arch-gutter {
-  position: relative;
-  min-width: 0;
-  border-left: 1px solid var(--rule);
-  background: var(--canvas);
-}
-.arch-gutter svg {
-  display: block;
-  overflow: visible;
-}
-.arch-gutter-empty {
-  position: absolute;
-  top: 14px;
-  left: 0;
-  right: 0;
-  margin: 0;
-  text-align: center;
-  font-size: 12px;
-  color: var(--ink-4);
-  pointer-events: none;
-}
+/* ---------- 层间调用矩阵 ---------- */
 
-.arch-edge { cursor: pointer; }
-.arch-edge-hit {
-  fill: none;
-  stroke: transparent;
-  stroke-width: 16;
-  pointer-events: stroke;
+.arch-matrix-scroll { overflow-x: auto; }
+
+.arch-matrix {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 11.5px;
 }
-.arch-edge-line {
-  fill: none;
-  stroke: var(--ink-4);
-  stroke-width: 1.2;
-  opacity: 0.72;
-}
-.arch-edge:hover .arch-edge-line,
-.arch-edge:focus-visible .arch-edge-line {
-  stroke: var(--measure);
-  opacity: 1;
-}
-.arch-edge:focus-visible .arch-edge-line { stroke-width: 2; }
-.arch-edge.is-selected .arch-edge-line {
-  stroke: var(--measure);
-  stroke-width: 2.2;
-  opacity: 1;
-}
-.arch-edge-count {
-  font-family: var(--font-mono);
+.arch-matrix-corner { width: 48px; }
+.arch-matrix th {
+  height: 26px;
+  padding: 0 2px;
   font-size: 11px;
-  fill: var(--ink-2);
-  text-anchor: middle;
-  /* --sheet 描边光晕：标签压在别的路径上时仍然可读 */
-  paint-order: stroke;
-  stroke: var(--sheet);
-  stroke-width: 3.5px;
-  stroke-linejoin: round;
-  stroke-linecap: round;
-  font-variant-numeric: tabular-nums;
-  pointer-events: none;
+  font-weight: 500;
+  line-height: 1.4;
+  color: var(--ink-3);
+  text-align: center;
+  white-space: nowrap;
+  transition: color var(--transition);
 }
-.arch-edge:hover .arch-edge-count,
-.arch-edge:focus-visible .arch-edge-count,
-.arch-edge.is-selected .arch-edge-count {
-  fill: var(--measure);
+.arch-matrix tbody th {
+  text-align: left;
+  padding-left: 0;
+}
+.arch-matrix th.is-active {
+  color: var(--measure);
   font-weight: 600;
 }
-.arch-arrow-head { fill: var(--ink-4); }
-.arch-arrow-head.is-selected { fill: var(--measure); }
-
-/* 选中边下方的详情条 */
-.arch-edge-detail {
-  margin-top: 12px;
-  padding: 12px 14px;
-  border: 1px solid var(--rule);
-  border-left: 3px solid var(--measure);
-  border-radius: var(--radius);
-  background: var(--sheet);
+.arch-cell {
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--rule-soft);
+  text-align: center;
+  color: var(--ink-4);
+  font-variant-numeric: tabular-nums;
 }
-.arch-edge-summary {
+.arch-cell.is-empty,
+.arch-cell.is-diagonal { background: var(--canvas); font-size: 11px; }
+.arch-cell-btn {
+  display: block;
+  width: 100%;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  background: var(--sheet);
+  background: color-mix(in srgb, var(--measure) var(--cell-tint, 8%), var(--sheet));
+  color: var(--ink-1);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition: background-color var(--transition), color var(--transition);
+}
+.arch-cell-btn:hover {
+  box-shadow: inset 0 0 0 1px var(--measure-border);
+}
+.arch-cell-btn.is-selected {
+  background: var(--measure);
+  color: var(--on-action);
+  font-weight: 600;
+}
+
+/* ---------- 右侧详情 ---------- */
+
+.arch-inspect {
+  position: relative;
+  margin-top: 14px;
+  padding: 12px 0 0;
+  border-top: 1px solid var(--rule-soft);
+}
+.arch-inspect-summary {
   margin: 0;
-  font-size: 13px;
+  padding-right: 38px;
+  font-size: 12.5px;
   line-height: 1.6;
   color: var(--ink-2);
 }
-.arch-edge-summary b {
+.arch-inspect-summary b {
   color: var(--ink-1);
   font-weight: 600;
 }
-.arch-edge-samples {
+.arch-inspect-meta {
+  margin: 4px 0 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--ink-3);
+}
+.arch-inspect-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 5px 16px;
+  align-items: center;
+  gap: 5px;
+  margin-top: 8px;
+}
+.arch-inspect-tag {
+  width: 26px;
+  flex: 0 0 auto;
+  font-size: 11px;
+  color: var(--ink-4);
+}
+.arch-link-btn {
+  height: 22px;
+  padding: 0 8px;
+  border: 1px solid var(--rule-soft);
+  border-radius: var(--radius);
+  background: var(--sheet);
+  color: var(--ink-2);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition: border-color var(--transition), color var(--transition);
+}
+.arch-link-btn:hover {
+  border-color: var(--measure-border);
+  color: var(--measure);
+}
+.arch-inspect-close {
+  position: absolute;
+  top: 8px;
+  right: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  font-size: 11.5px;
+  color: var(--ink-3);
+  cursor: pointer;
+}
+.arch-inspect-close:hover { color: var(--measure); }
+
+.arch-pairs {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
   margin: 8px 0 0;
   padding: 0;
+  list-style: none;
 }
-.arch-edge-sample {
-  display: inline-flex;
+.arch-pair-item { min-width: 0; }
+.arch-pair {
+  display: flex;
   align-items: baseline;
-  gap: 5px;
-  font-size: 12px;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+  padding: 3px 6px;
+  border: 0;
+  border-radius: var(--radius);
+  background: none;
   color: var(--ink-2);
+  font: inherit;
+  font-size: 11.5px;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color var(--transition);
 }
-.arch-edge-sample-name {
+.arch-pair:hover { background: var(--measure-soft); }
+.arch-pair.is-static { cursor: default; }
+.arch-pair.is-static:hover { background: none; }
+.arch-pair-name {
+  min-width: 0;
   font-family: var(--font-mono);
   font-size: 11.5px;
   color: var(--ink-1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.arch-edge-sample-count {
+.arch-pair-arrow { flex: 0 0 auto; color: var(--ink-4); }
+.arch-pair-count {
+  flex: 0 0 auto;
+  margin-left: auto;
   color: var(--ink-3);
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
-.arch-edge-samples-empty {
-  margin: 8px 0 0;
+
+.arch-inspect-hint {
+  margin: 14px 0 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--rule-soft);
   font-size: 12px;
+  line-height: 1.6;
   color: var(--ink-4);
 }
 
@@ -276,7 +373,8 @@
   color: var(--ink-3);
 }
 
-/* 加载 / 错误 / 空态 */
+/* ---------- 加载 / 错误 / 空态 ---------- */
+
 .arch-status {
   margin: 0;
   padding: 28px 0;
@@ -307,20 +405,58 @@
   font-size: 12.5px;
 }
 
-@media (max-width: 860px) {
-  .arch-body { grid-template-columns: minmax(0, 1fr); }
-  .arch-gutter {
-    width: 100%;
-    height: 792px;
+@media (max-width: 1080px) {
+  .arch-sheet { grid-template-columns: minmax(0, 1fr); }
+  .arch-panel-matrix {
     border-left: 0;
     border-top: 1px solid var(--rule);
-    overflow-x: auto;
-    overflow-y: hidden;
   }
-  .arch-gutter svg { margin: 0 auto; }
-  .arch-gutter-empty { top: 10px; }
+}
+
+/* 右侧 Agent 面板会压缩内容区，按容器而不是视口断点 */
+@container (max-width: 720px) {
+  .arch-sheet { grid-template-columns: minmax(0, 1fr); }
+  .arch-panel-matrix {
+    border-left: 0;
+    border-top: 1px solid var(--rule);
+  }
+}
+
+@container (max-width: 480px) {
+  .arch-panel { padding: 12px; }
+  .arch-panel-head {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+  }
+  .arch-panel-head p { text-align: left; }
+  .arch-group {
+    flex-direction: column;
+    gap: 3px;
+  }
+  .arch-stratum { padding-left: 9px; }
+}
+
+@media (max-width: 640px) {
+  .arch-panel { padding: 12px; }
+  .arch-panel-head {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+  }
+  .arch-panel-head p { text-align: left; }
+  .arch-group {
+    flex-direction: column;
+    gap: 3px;
+  }
+  .arch-stratum { padding-left: 9px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .arch-class-chip { transition: none; }
+  .arch-stratum,
+  .arch-stratum-name,
+  .arch-class,
+  .arch-cell-btn,
+  .arch-link-btn,
+  .arch-pair { transition: none; }
 }
