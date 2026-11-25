@@ -34,6 +34,9 @@ export function groupPreview(group, max = 3) {
 
 /** 边按调用次数降序，其次按 from>to 字典序；不修改入参。 */
 export function sortedEdges(edges = []) {
-  return [...edges].sort((a, b) => b.count - a.count
-    || `${a.fromLayer}>${a.toLayer}`.localeCompare(`${b.fromLayer}>${b.toLayer}`))
+  return [...edges].sort((a, b) => {
+    const ka = `${a.fromLayer}>${a.toLayer}`
+    const kb = `${b.fromLayer}>${b.toLayer}`
+    return b.count - a.count || (ka < kb ? -1 : ka > kb ? 1 : 0)
+  })
 }
