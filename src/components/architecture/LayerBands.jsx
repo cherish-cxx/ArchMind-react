@@ -1,4 +1,4 @@
-import { Fragment, useState } from 'react'
+import { useState } from 'react'
 import {
   LAYER_LABELS,
   LAYER_ORDER,
@@ -35,6 +35,19 @@ const edgePath = (fromIndex, toIndex) => {
   const y2 = bandCenter(toIndex)
   return `M0,${y1} C80,${y1} 170,${y2} ${GUTTER_W},${y2}`
 }
+
+// 同一条曲线上的参数点；计数标签沿曲线错开，避免多条边在正中点叠字。
+const cubicPoint = (fromIndex, toIndex, t) => {
+  const y1 = bandCenter(fromIndex)
+  const y2 = bandCenter(toIndex)
+  const mt = 1 - t
+  return {
+    x: 3 * mt * mt * t * 80 + 3 * mt * t * t * 170 + t * t * t * GUTTER_W,
+    y: mt * mt * mt * y1 + 3 * mt * mt * t * y1 + 3 * mt * t * t * y2 + t * t * t * y2
+  }
+}
+
+const labelT = (index) => Math.min(0.68, 0.32 + (index % 5) * 0.09)
 
 function GroupBox({ group, onOpenCode }) {
   const preview = groupPreview(group, 3)
@@ -114,13 +127,13 @@ function EdgeGutter({ edges, selectedKey, onSelect }) {
             <path d="M0,0 L8,4 L0,8 z" className="arch-arrow-head is-selected" />
           </marker>
         </defs>
-        {edges.map((edge) => {
+        {edges.map((edge, index) => {
           const fromIndex = layerIndex(edge.fromLayer)
           const toIndex = layerIndex(edge.toLayer)
           const key = edgeKey(edge)
           const selected = key === selectedKey
           const count = edge.count ?? 0
-          const middleware = (bandCenter(fromIndex) + bandCenter(toIndex)) / 2
+          const labelPoint = cubicPoint(fromIndex, toIndex, labelT(index))
           const activate = () => onSelect(edge)
           return (
             <g
@@ -144,7 +157,7 @@ function EdgeGutter({ edges, selectedKey, onSelect }) {
                 d={edgePath(fromIndex, toIndex)}
                 markerEnd={`url(#${selected ? 'arch-arrow-sel' : 'arch-arrow'})`}
               />
-              <text className="arch-edge-count" x={GUTTER_W / 2} y={middleware} dy="0.32em">
+              <text className="arch-edge-count" x={labelPoint.x} y={labelPoint.y} dy="0.32em">
                 {count}
               </text>
             </g>
@@ -222,21 +235,22 @@ export default function LayerBands({ data, loading = false, error = '', onRetry,
     setSelectedKey((current) => (current === key ? null : key))
   }
 
+  const otherLayer = model.layers.find((layer) => layer.key === 'other')
+  const hasOtherClasses = (otherLayer?.classCount || 0) > 0
+
   return (
     <div className="arch-view">
       <div className="arch-body">
         <div className="arch-bands">
           {model.layers.map((layer) => (
-            <Fragment key={layer.key}>
-              <Band layer={layer} onOpenCode={onOpenCode} />
-              {layer.key === 'other' && (
-                <p className="arch-other-note">未能归类的类不会被隐藏</p>
-              )}
-            </Fragment>
+            <Band key={layer.key} layer={layer} onOpenCode={onOpenCode} />
           ))}
         </div>
         <EdgeGutter edges={edges} selectedKey={selectedKey} onSelect={select} />
       </div>
+      {hasOtherClasses && (
+        <p className="arch-other-note">未能归类的类不会被隐藏</p>
+      )}
       <EdgeDetail edge={selected} />
       <p className="arch-foot">分层由类角色推导；同层调用不计入跨层边</p>
     </div>

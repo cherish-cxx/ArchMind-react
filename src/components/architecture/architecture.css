@@ -139,14 +139,15 @@
   color: var(--measure);
 }
 
-/* 未归类层下方的固定说明行 */
+/* 未归类层说明：放在两列主体下方，避免拉高左列破坏与 SVG 槽的对齐 */
 .arch-other-note {
-  margin: 0;
-  padding: 5px 16px 6px;
-  border-bottom: 1px solid var(--rule-soft);
+  margin: 8px 0 0;
+  padding: 6px 12px;
+  border-left: 3px solid var(--warn);
+  border-radius: var(--radius);
   background: var(--warn-soft);
   color: var(--warn);
-  font-size: 11.5px;
+  font-size: 12px;
   line-height: 1.5;
 }
 
@@ -202,10 +203,12 @@
   font-size: 11px;
   fill: var(--ink-2);
   text-anchor: middle;
+  /* --sheet 描边光晕：标签压在别的路径上时仍然可读 */
   paint-order: stroke;
   stroke: var(--sheet);
-  stroke-width: 3px;
+  stroke-width: 3.5px;
   stroke-linejoin: round;
+  stroke-linecap: round;
   font-variant-numeric: tabular-nums;
   pointer-events: none;
 }
