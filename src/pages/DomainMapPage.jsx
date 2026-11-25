@@ -151,8 +151,10 @@ export default function DomainMapPage({
       cacheRef.current.clear()
       setDetail({ status: 'idle', data: null, error: '' })
       loadMap(projectId)
+      // 停在分层视图时，分析结束同样要刷新六层数据
+      if (viewMode === 'layers') loadLayers(projectId)
     }
-  }, [analyzing, loggedIn, projectId, loadMap])
+  }, [analyzing, loggedIn, projectId, viewMode, loadMap, loadLayers])
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: 0, behavior: 'auto' })
