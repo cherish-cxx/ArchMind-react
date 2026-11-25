@@ -164,6 +164,88 @@ const MOCK_AREAS = [
   }
 ]
 
+const MOCK_LAYERS = {
+  classCount: 62,
+  layers: [
+    {
+      key: 'entry', name: '用户入口层', classCount: 8, groups: [
+        { key: 'order', name: '订单', detail: null, classCount: 3, truncated: false, classes: [
+          { uid: `${PKG}.controller.OrderController`, name: 'OrderController' },
+          { uid: `${PKG}.controller.CartController`, name: 'CartController' },
+          { uid: `${PKG}.controller.PaymentController`, name: 'PaymentController' }
+        ] },
+        { key: 'user', name: '用户', detail: null, classCount: 1, truncated: false, classes: [
+          { uid: `${PKG}.controller.UserController`, name: 'UserController' }
+        ] }
+      ]
+    },
+    {
+      key: 'business', name: '业务层', classCount: 18, groups: [
+        { key: 'order', name: '订单', detail: null, classCount: 3, truncated: false, classes: [
+          { uid: `${PKG}.service.OrderService`, name: 'OrderService' },
+          { uid: `${PKG}.service.CartService`, name: 'CartService' },
+          { uid: `${PKG}.service.PaymentService`, name: 'PaymentService' }
+        ] },
+        { key: 'item', name: '商品', detail: null, classCount: 2, truncated: false, classes: [
+          { uid: `${PKG}.service.ItemService`, name: 'ItemService' },
+          { uid: `${PKG}.service.StockService`, name: 'StockService' }
+        ] }
+      ]
+    },
+    {
+      key: 'domain-model', name: '领域模块层', classCount: 8, groups: [
+        { key: 'order', name: '订单', detail: null, classCount: 2, truncated: false, classes: [
+          { uid: `${PKG}.model.OrderDTO`, name: 'OrderDTO' },
+          { uid: `${PKG}.model.OrderItemDTO`, name: 'OrderItemDTO' }
+        ] }
+      ]
+    },
+    {
+      key: 'infrastructure', name: '基础设施', classCount: 20, groups: [
+        { key: 'mapper', name: 'mapper', detail: `${PKG}.repository`, classCount: 5, truncated: false, classes: [
+          { uid: `${PKG}.repository.OrderMapper`, name: 'OrderMapper' },
+          { uid: `${PKG}.repository.ItemMapper`, name: 'ItemMapper' },
+          { uid: `${PKG}.repository.CartMapper`, name: 'CartMapper' }
+        ] }
+      ]
+    },
+    {
+      key: 'external', name: '外部依赖', classCount: 4, groups: [
+        { key: 'remote', name: 'remote', detail: `${PKG}.remote`, classCount: 2, truncated: false, classes: [
+          { uid: `${PKG}.remote.CouponClient`, name: 'CouponClient' },
+          { uid: `${PKG}.remote.InventoryClient`, name: 'InventoryClient' }
+        ] }
+      ]
+    },
+    {
+      key: 'other', name: '未归类', classCount: 2, groups: [
+        { key: 'legacy', name: 'legacy', detail: `${PKG}.legacy`, classCount: 2, truncated: false, classes: [
+          { uid: `${PKG}.legacy.LegacyHelper`, name: 'LegacyHelper' },
+          { uid: `${PKG}.legacy.UnsortedThing`, name: 'UnsortedThing' }
+        ] }
+      ]
+    }
+  ],
+  edges: [
+    { fromLayer: 'entry', toLayer: 'business', count: 12, samples: [
+      { fromUid: `${PKG}.controller.OrderController`, toUid: `${PKG}.service.OrderService`, count: 6 },
+      { fromUid: `${PKG}.controller.UserController`, toUid: `${PKG}.service.UserService`, count: 2 }
+    ] },
+    { fromLayer: 'business', toLayer: 'infrastructure', count: 24, samples: [
+      { fromUid: `${PKG}.service.OrderService`, toUid: `${PKG}.repository.OrderMapper`, count: 8 }
+    ] },
+    { fromLayer: 'business', toLayer: 'external', count: 6, samples: [
+      { fromUid: `${PKG}.service.OrderService`, toUid: `${PKG}.remote.CouponClient`, count: 3 }
+    ] },
+    { fromLayer: 'domain-model', toLayer: 'business', count: 3, samples: [
+      { fromUid: `${PKG}.model.OrderDTO`, toUid: `${PKG}.service.OrderService`, count: 2 }
+    ] },
+    { fromLayer: 'entry', toLayer: 'infrastructure', count: 1, samples: [
+      { fromUid: `${PKG}.controller.CartController`, toUid: `${PKG}.repository.CartMapper`, count: 1 }
+    ] }
+  ]
+}
+
 const ORDER_CREATE_DETAIL = {
   capability: {
     uid: 'POST /orders',
@@ -455,6 +537,13 @@ async function dispatch(req) {
     const session = authSession(req)
     if (!session) return { status: 401, json: fail(401, '未登录或登录已失效') }
     return { status: 200, json: ok({ areas: MOCK_AREAS }) }
+  }
+
+  const layersMatch = path.match(/^\/api\/project\/(\d+)\/architecture-layers$/)
+  if (method === 'GET' && layersMatch) {
+    const session = authSession(req)
+    if (!session) return { status: 401, json: fail(401, '未登录或登录已失效') }
+    return { status: 200, json: ok(MOCK_LAYERS) }
   }
 
   const capabilityMatch = path.match(/^\/api\/project\/(\d+)\/capability$/)
